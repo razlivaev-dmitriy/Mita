@@ -6,13 +6,8 @@ bs4
 sounddevice
 soundfile
 screen_brightness_control
-matplotlib
-ruaccent
-TeraTTS
 keyboard
 pygetwindow
-keras
-tensorflow.keras
 coqpit
 flask
 gradio
@@ -81,4 +76,5 @@ tensorboardX==2.6.2.2
 click==8.0.0
 typer==0.9.4
 blis==0.7.11
+
 librosa==0.10.0
