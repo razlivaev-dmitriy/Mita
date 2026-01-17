@@ -5,7 +5,7 @@ import win32profile
 import servicemanager
 import sys
 import time
-from os import getlogin, path, scandir, makedirs, environ
+from os import getlogin, path, scandir, makedirs
 import json
 import psutil
 import ctypes
@@ -15,7 +15,12 @@ import pythoncom
 import wmi
 from threading import Event
 
-Mitapath = f"{win32profile.GetUserProfileDirectory()}/AppData/Local"
+def get_downloaded_user():
+    with open(f"{path}/Mita/data/config.json", 'w', encoding='utf-8') as f:
+        install_info = json.load(f)
+    return install_info
+        
+Mitapath = f"{get_downloaded_user()["profile_path"]}/AppData/Local"
 
 def install_service():
     try:
