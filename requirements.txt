@@ -6,7 +6,6 @@ bs4
 sounddevice
 soundfile
 screen_brightness_control
-keyboard
 pygetwindow
 coqpit
 flask
@@ -57,6 +56,7 @@ wim
 pywin32
 sqlite3
 cv2
+gdown
 subprocess.run
 wrapt==1.11
 urllib3==1.26
@@ -69,12 +69,7 @@ gruut==2.2.3
 pandas==1.4
 fastapi==0.110
 spacy==3.7.0
-tensorflow==2.17
-tensorflow-intel==2.17
-tensorboard==2.17
-tensorboardX==2.6.2.2
 click==8.0.0
 typer==0.9.4
 blis==0.7.11
-
 librosa==0.10.0

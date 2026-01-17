@@ -10,6 +10,7 @@ from win10toast import ToastNotifier
 import threading
 import time
 from datetime import datetime
+from functions_for_Mita import path_of_this_file, SetProgrammToAutoStart, RemoveProgrammFromAutoStart
 
 
 class App(ctk.CTk):
@@ -17,7 +18,7 @@ class App(ctk.CTk):
         super().__init__()
 
         try:
-            self.data_sound, self.fs_sound = sf.read("ButtonSound.mp3", dtype="float32")
+            self.data_sound, self.fs_sound = sf.read(f"{path_of_this_file}/res/ButtonSound.mp3", dtype="float32")
         except Exception as e:
             print(f"Ошибка загрузки аудио: {e}")
             self.sound_enabled = False
@@ -109,6 +110,8 @@ class App(ctk.CTk):
         for child in self.button_frame.winfo_children():
             if isinstance(child, ctk.CTkButton) and "Автозагрузка" in child.cget("text"):
                 child.configure(text=f"Автозагрузка: {status}")
+        if self.autoload: SetProgrammToAutoStart()
+        else: RemoveProgrammFromAutoStart()
         self.play_button_sound()
 
     def start(self):

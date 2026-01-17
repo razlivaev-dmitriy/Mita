@@ -9,7 +9,6 @@ try:
     sleep(0.1)
     import os
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-    import psutil
     import webbrowser as webb
     # import pyttsx3 as p3
     import json
@@ -46,7 +45,8 @@ try:
     subKey = r"Software\Microsoft\Windows\CurrentVersion\Run"
     files_learning = False
     disk_usage_bool = True
-    device = torch.device('cpu')
+    device = torch.device('cpu') if not torch.cuda.is_available() else torch.device('cuda')
+    # device = torch.device('cpu')
 
     en_to_ru_alphabet = {".": " точка ", "shch": "щ", "tion": "шн", "sch": "ск", "chr": "хр", "e ": " ", "e-": "-", "e_": "_", "qw": "кв", "dge": "дж", "ch": "ч", "sh": "ш", "pp": "п", "mm": "м", "ee": "и", "ea": "и", "nn": "н", "oo": "у", "ou": "ау", "ss": "с", "ph": "ф", "th": "т", "wh": "в", "wr": "р", "kn": "н", "ck": "к", "ce": "се", "ci": "си", "cy": "си", "ur": "ёр", "ye": "ай", "a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "г", "h": "х", "i": "и", "j": "дж", "k": "к", "l": "л", "m": "м", "n": "н", "o": "о", "p": "п", "q": "кв", "r": "р", "s": "с", "t": "т", "u": "у", "v": "в", "w": "в", "x": "кс", "y": "и", "z": "з"}#, "Shch": "Щ", "Sch": "Ск", "Qw": "Кв", "Chr": "Хр", "Ch": "Ч", "Sh": "Ш", "Pp": "П", "Mm": "М", "Ee": "И", "Ea": "И", "Nn": "Н", "Oo": "У", "Ss": "С", "Ph": "Ф", "Th": "З", "Wh": "В", "Wr": "Р", "Kn": "Н", "Ck": "К", "Ce": "Се", "Ci": "Си", "Cy": "Си", "A": "Эй", "B": "Би", "C": "Си", "D": "Ди", "E": "И", "F": "Эф", "G": "Джи", "H": "Эйч", "I": "Ай", "J": "Джей", "K": "Кей", "L": "Эл", "M": "Эм", "N": "Эн", "O": "Оу", "P": "Пи", "Q": "Кью", "R": "Ар", "S": "Эс", "T": "ти", "U": "Ю", "V": "Ви", "W": "В", "X": "Икс", "Y": "вай", "Z": "зет"}
 
@@ -186,7 +186,9 @@ try:
         # device = "cuda" if torch.cuda.is_available() else "cpu"
         # tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", progress_bar=True).to(device)
         # voice = p3.init()
-        model = torch.package.PackageImporter(f"{path_of_this_file}\\v5_ru.pt").load_pickle("tts_models", "model")
+        
+        # model = torch.hub.load(repo_or_dir='snakers4/silero-models', model='silero_tts', language="ru", speaker="v5_ru")
+        model = torch.package.PackageImporter(f"{path_of_this_file}/models/v5_ru.pt").load_pickle("tts_models", "model")
         model.to(device)
         sample_rate = 48000
         speaker = 'xenia'
@@ -197,78 +199,7 @@ try:
 # 
 
 
-# Общие функции
-
-    def LearnPathsLaunchedProcesses():
-        global user_processes_dict, user_processes_true
-
-        user_processes = []
-        user_processes_names = []
-        user_processes_paths = []
-
-        with open(f"{path_of_this_file}\\processes_data.json", "r", encoding="utf-8") as f:
-            user_processes_dict = json.load(f)
-
-        try:
-            all_processes = psutil.process_iter()
-            for p in all_processes:
-                if p.username() == psutil.Process().username():
-                    if p.pid >= 1000:
-                        if p.status() == psutil.STATUS_RUNNING:
-                            for s in range(len(p.exe())):
-                                if s >= 10:
-                                    break
-                                if p.exe()[s] == "C:\Windows"[s]:
-                                    continue
-                                else:
-                                    user_processes.append(p)
-                                    break
-            
-            for i in range(len(user_processes) - 1):
-                if i > 0:
-                    for ii in range(i-1, 0, -1):
-                        try:
-                            if user_processes[i].exe() == user_processes[ii].exe():
-                                break
-                        except psutil.NoSuchProcess:
-                            pass
-                    else:
-                        user_processes_true.append(user_processes[i])
-                        
-            for i in user_processes_true:
-                user_processes_paths.append(i.exe())
-                user_processes_names.append(i.name()[:-4])
-                user_processes_dict[i.name()[:-4]] = i.exe()
-        except:
-            #  print(f"{path_of_this_file}admin_error.wav".replace("\\", "/"))
-            #  playsound(f"{path_of_this_file}admin_error.wav".replace("\\", "/"))
-            #  print(f"admin_error.wav")
-            #  playsound(f"admin_error.wav")
-            # sd.play(admin_error, 23500)
-            # sd.wait()
-            # sd.stop()
-            return "Невозможно выполнить данное действие по причине отсутствия прав администратора"
-
-        with open(f"{path_of_this_file}\\processes_data.json", "w", encoding="utf-8") as f:
-            json.dump(user_processes_dict, f, ensure_ascii=False, indent=4)
-
-        # user_processes_true, user_processes_names, user_processes_paths, user_processes_dict
-        return ""
-    
-    # def LearnPathsOpenedFiles():
-    #     global user_files_dict
-
-    #     with open(f"{path_of_this_file}\\files_data.json", "r", encoding="utf-8") as f:
-    #         user_files_dict = json.load(f)
-
-    #     for i in user_processes_true:
-    #         if i.open_files() != []:
-    #             user_files_dict[i.name()] = i.open_files()
-
-    #     with open(f"{path_of_this_file}\\files_data.json", "w", encoding="utf-8") as f:
-    #         json.dump(user_files_dict, f, ensure_ascii=False, indent=4)
-
-    #     return user_files_dict
+# Общие функции 
 
     def CheckReminders(rem_dict: dict):
         rem_keys = list(rem_dict.keys())
@@ -280,71 +211,15 @@ try:
                 # Voice('Напоминание: "' + rem_keys[i] + '"')
                 rem_dict.pop(rem_keys[i])
                 return rem_keys[i]
-            
-    def CheckDiskUsage():
-        global disk_usage_bool
-        try:
-            count = exp.GetDiskAction()
-            if count < 50:
-                disk_usage_bool = True
-            elif count > 90:
-                disk_usage_bool = False
-        except PermissionError:
-            disk_usage_bool = False
 
     def CheckThread(rem_dict):
         while 1:
             CheckReminders(rem_dict)
             exp.CheckExplorer()
-            LearnPathsLaunchedProcesses()
-            CheckDiskUsage()
             CheckInternetConnection()
             sys.stdout.flush()
             sys.stderr.flush()
             sleep(10)
-            
-    # def LearnFilesFromExplorer():
-    #     try:
-    #         elems = os.listdir(current_values[0])
-    #         if current_values[1]: elems = elems[elems.index(current_values[1])-1:]
-    #         exp.StartLearningFiles(current_values[0], elems, current_values[2], disk_usage_bool)
-    #         if disk_usage_bool: current_values[3] = 1
-    #         with open(f"{path_of_this_file}\\files_data.json", "w", encoding="utf-8") as f:
-    #             json.dump(files_dict, f, ensure_ascii=False, indent=2)
-    #     except PermissionError:
-    #         current_values[3] = 1
-            
-    def LearnFilesFromExplorer():
-        global disk_usage_bool
-        try:
-            if exp.stop.is_set(): return
-            exp.LearningFiles(disk_usage_bool)
-            print("Файлы сохранены в базу данных")
-        except PermissionError as e:
-            print(str(e))
-            exp.stop.set()
-            
-    def LearnFiles():
-        global current_drive, disk_usage_bool
-        disks = [f"C:\\Users\\{username}"] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
-        for disk in disks:
-            current_drive = disk
-            exp.stop.clear()
-            exp.stack = [(disk, 0)]
-            while not exp.stop.is_set():
-                # if stop: return
-                CheckDiskUsage()
-                if disk_usage_bool:
-                    exp.GetDisksInfo()
-                    LearnFilesFromExplorer()
-                else:
-                    sleep(5)
-                    continue
-                if not exp.stack:
-                    exp.stop.set()
-                    print(f"Сканирование диска {disk} завершено")
-                sleep(1)
-        exp.CloseDatabase()
 
     def CheckInternetConnection():
         global connection
@@ -361,7 +236,7 @@ try:
         return user_processes_dict[programms[programmName]]
     
     def GetProgramsByJSON():
-        with open(f"{path_of_this_file}\\processes_data.json", "r", encoding="utf-8") as f:
+        with open(f"{path_of_this_file}/data/processes_data.json", "r", encoding="utf-8") as f:
             founded_programs = json.load(f)
         for fp in founded_programs:
             programm_name = fp.lower()
@@ -462,7 +337,6 @@ try:
     def CloseProgramm(data: list[str]):
         if data is None:
             return ["НЗВФАЙЛА"]
-        LearnPathsLaunchedProcesses()
         print(data)
         name = GetProgrammPathByName(data[0])
         for process in user_processes_true:
@@ -561,7 +435,7 @@ try:
             programm_path = path_of_this_file
         else:
             file = data[0]
-            programm_path = os.dirname(GetProgrammPathByName(data[0]))
+            programm_path = os.path.dirname(GetProgrammPathByName(data[0]))
         if programm_path == "":
             programm_path = path_of_this_file
         programm_path = os.path.dirname(programm_path)
@@ -741,10 +615,8 @@ try:
     print("\r4/9", end="", flush=True)
     CheckInternetConnection()
     print("\r5/9", end="", flush=True)
-    LearnPathsLaunchedProcesses()
-    print("\r6/9", end="", flush=True)
     GetProgramsByJSON()
-    print("\r7/9", end="", flush=True)
+    print("\r6/9", end="", flush=True)
 
     # Осторожно! ↓ Не работает!
     # LearnPathsOpenedFiles()
@@ -754,10 +626,7 @@ try:
 
     thread1 = threading.Thread(target=CheckThread, args=(reminders,))
     thread1.start()
-    print("\r8/9", end="", flush=True)
-    thread2 = threading.Thread(target=LearnFiles)
-    thread2.start()
-    print("\r9/9", end="", flush=True)
+    print("\r7/9", end="", flush=True)
     print("\rЗагрузка завершена")
 
     # with open(f"{path_of_this_file}processes_data.json", "r", encoding="utf-8") as f:
@@ -786,7 +655,7 @@ try:
     # print(RenameFile("D:/Downloads/тест.txt", "текст2.txt"))
     # print(RemoveFile("D:/Downloads/words_to_numbers_from_RDI.py"))
     # print(StartProgramm("C:/Users/Admin/AppData/Local/WarThunder/launcher.exe"))
-    # print(Voice("Привет!"))
+    print(Voice("Привет!"))
     # print(OpenURL("https://www.google.com/search?q=%D0%BF%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B4%D1%87%D0%B8%D0%BA&oq=&gs_lcrp=EgZjaHJvbWUqCQgAECMYJxjqAjIJCAAQIxgnGOoCMgkIARAjGCcY6gIyCQgCECMYJxjqAjIJCAMQIxgnGOoCMgkIBBAjGCcY6gIyCQgFECMYJxjqAjIJCAYQIxgnGOoCMgkIBxAjGCcY6gLSAQg1ODFqMGoxNagCCLACAQ&sourceid=chrome&ie=UTF-8"))
     # print(RequestToBrowser("переводчик"))
     # print(LearnPathsLaunchedProcesses())
