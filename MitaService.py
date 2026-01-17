@@ -4,7 +4,7 @@ import win32event
 import servicemanager
 import sys
 import time
-from os import getlogin, path, scandir, makedirs
+from os import path, scandir, makedirs
 import json
 import psutil
 import ctypes
@@ -51,7 +51,7 @@ def install_service():
     
 class LearnFiles():
     def __init__(self):
-        self.current_path = f"C:/Users/{getlogin()}"
+        self.current_path = get_downloaded_user()['profile_path']
         self.stack = [(self.current_path, 0)]
         self.stop = Event()
         self.init_database()
@@ -219,7 +219,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.current_drive = None
         self.disk_usage_bool = False
         
-        self.filesСlass = LearnFiles()
+        self.filesClass = LearnFiles()
         
         self.log("Сервис инициализирован")
         
@@ -273,7 +273,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def CollectionFilesData(self):
         while not self.stop_event.is_set():
             try:
-                disks = [f"C:\\Users\\{getlogin()}"] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
+                disks = [get_downloaded_user()['profile_path']] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
                 for disk in disks:
                     if not self.disk_usage_bool:
                         self.log(f"Диск {disk} загружен, пропускаем сканирование")
@@ -390,7 +390,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                 if thread.is_alive():
                     thread.join(timeout=5)
         
-        self.files_class.CloseDatabase()
+        self.filesClass.CloseDatabase()
         self.log("Сервис завершил работу")
     
     def log(self, message):
