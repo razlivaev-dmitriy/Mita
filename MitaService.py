@@ -343,35 +343,50 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.log("Сервис останавливается...")
         
     def SvcDoRun(self):
-        self.log("Сервис запущен!")
-        
-        threads = self.StartThreads()
+        self.ReportServiceStatus(win32service.SERVICE_START_PENDING)
+        self.log("Сервис запускается...")
         
         try:
+            self.log("Инициализация...")
+            
+            def start_threads_async():
+                self.threads = self.StartThreads()
+            
+            thread_starter = threading.Thread(target=start_threads_async)
+            thread_starter.daemon = True
+            thread_starter.start()
+            
+            self.ReportServiceStatus(win32service.SERVICE_RUNNING)
+            self.log("Сервис запущен и работает")
+
             while self.is_alive:
-                for i, thread in enumerate(threads):
+                result = win32event.WaitForSingleObject(self.hWaitStop, 1000)
+                if result == win32event.WAIT_OBJECT_0:
+                    break
+                for i, thread in enumerate(self.threads):
                     if not thread.is_alive():
                         self.log(f"Поток {i} завершился, перезапускаем...")
                         if i == 0:
-                            threads[i] = threading.Thread(target=self.collection_processes_data, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.collection_processes_data, daemon=True)
                         elif i == 1:
-                            threads[i] = threading.Thread(target=self.check_disk_usage, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.check_disk_usage, daemon=True)
                         elif i == 2:
-                            threads[i] = threading.Thread(target=self.collection_files_data, daemon=True)
-                        threads[i].start()
-                
-                result = win32event.WaitForSingleObject(self.hWaitStop, 30000)
-                if result == win32event.WAIT_OBJECT_0:
-                    break
-                    
+                            self.threads[i] = threading.Thread(target=self.collection_files_data, daemon=True)
+                        self.threads[i].start()
+                if int(time.time()) % 30 == 0:
+                    self.log("Сервис активен...")
         except Exception as e:
             self.log(f"Критическая ошибка в SvcDoRun: {str(e)}")
-        
+            import traceback
+            self.log(traceback.format_exc())
+            
         self.stop_event.set()
-        for thread in threads:
-            thread.join(timeout=5)
+        if hasattr(self, 'threads'):
+            for thread in self.threads:
+                if thread.is_alive():
+                    thread.join(timeout=5)
         
-        self.filesClass.CloseDatabase()
+        self.files_class.CloseDatabase()
         self.log("Сервис завершил работу")
     
     def log(self, message):
