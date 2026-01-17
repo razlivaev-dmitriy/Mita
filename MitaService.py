@@ -1,7 +1,6 @@
 import win32serviceutil
 import win32service
 import win32event
-import win32profile
 import servicemanager
 import sys
 import time
@@ -16,11 +15,11 @@ import wmi
 from threading import Event
 
 def get_downloaded_user():
-    with open(f"{path}/Mita/data/config.json", 'w', encoding='utf-8') as f:
+    with open(f"C:/ProgramData/Mita/config.json", 'r', encoding='utf-8') as f:
         install_info = json.load(f)
     return install_info
         
-Mitapath = f"{get_downloaded_user()["profile_path"]}/AppData/Local"
+Mitapath = f"{get_downloaded_user()['profile_path']}/AppData/Local"
 
 def install_service():
     try:
