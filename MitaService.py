@@ -1,7 +1,6 @@
 import win32serviceutil
 import win32service
 import win32event
-import servicemanager
 import sys
 import time
 from os import path, scandir, makedirs
@@ -13,13 +12,21 @@ import sqlite3
 import pythoncom
 import wmi
 from threading import Event
+import win32pdh
+
+Mitapath = ""
 
 def get_downloaded_user():
     with open(f"C:/ProgramData/Mita/config.json", 'r', encoding='utf-8') as f:
         install_info = json.load(f)
     return install_info
         
-Mitapath = f"{get_downloaded_user()['profile_path']}/AppData/Local"
+def get_mita_path():
+    global Mitapath
+    try:
+        Mitapath = get_downloaded_user().get('program_path')
+    except Exception as e:
+        print(f"Ошибка чтения конфига: {e}")
 
 def install_service():
     try:
@@ -51,7 +58,7 @@ def install_service():
     
 class LearnFiles():
     def __init__(self):
-        self.current_path = get_downloaded_user()['profile_path']
+        self.current_path = get_downloaded_user().get('profile_path')
         self.stack = [(self.current_path, 0)]
         self.stop = Event()
         self.init_database()
@@ -207,7 +214,14 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     _svc_description_ = "Сервис сбора необходимых данных для голосового ассистента Мита"
     
     def __init__(self, args):
-        win32serviceutil.ServiceFramework.__init__(self, args)
+        if not args:
+            args = [self._svc_name_]
+        
+        if not "debug" in args:
+            win32serviceutil.ServiceFramework.__init__(self, args)
+        else:
+            self.args = args
+            self.ssh = None
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
         self.is_alive = True
         self.stop_event = threading.Event()
@@ -273,16 +287,16 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def CollectionFilesData(self):
         while not self.stop_event.is_set():
             try:
-                disks = [get_downloaded_user()['profile_path']] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
+                disks = [get_downloaded_user().get('profile_path')] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
                 for disk in disks:
                     if not self.disk_usage_bool:
                         self.log(f"Диск {disk} загружен, пропускаем сканирование")
                         continue
                     
                     self.current_drive = disk
-                    self.filesСlass.stack = [(disk, 0)]
-                    self.filesСlass.stop.clear()
-                    self.filesСlass.GetDisksInfo()
+                    self.filesClass.stack = [(disk, 0)]
+                    self.filesClass.stop.clear()
+                    self.filesClass.GetDisksInfo()
                     
                     try:
                         self.filesClass.LearningFiles(resume=True)
@@ -300,18 +314,10 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def CheckDiskUsage(self):
         while not self.stop_event.is_set():
             try:
-                try:
-                    pythoncom.CoInitialize()
-                    c = wmi.WMI()
-                    for disk in c.Win32_PerfFormattedData_PerfDisk_PhysicalDisk():
-                        if disk.Name[2:] in self.current_drive and disk.Name[2:]:
-                            utilization = float(disk.PercentDiskTime)
-                            if utilization > 100.0: utilization = 100.0
-                            return utilization
-                except Exception as e:
-                    print(str(e))
-                finally:
-                    pythoncom.CoUninitialize()
+                drive_letter = self.current_drive[0]
+                utilization = self.get_disk_busy_time_pdh(drive_letter)
+                self.log(f"Диск {drive_letter}: загрузка {utilization:.1f}%")
+                
                 if utilization < 50:
                     self.disk_usage_bool = True
                 elif utilization > 90:
@@ -324,15 +330,15 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def StartThreads(self):
         threads = []
         
-        thread1 = threading.Thread(target=self.CollectionProcessesData, daemon=True)
+        thread1 = threading.Thread(target=self.CollectionFilesData, daemon=True)
         thread1.start()
         threads.append(thread1)
         
-        thread2 = threading.Thread(target=self.CheckDiskUsage, daemon=True)
+        thread2 = threading.Thread(target=self.CollectionProcessesData, daemon=True)
         thread2.start()
         threads.append(thread2)
         
-        thread3 = threading.Thread(target=self.CollectionFilesData, daemon=True)
+        thread3 = threading.Thread(target=self.CheckDiskUsage, daemon=True)
         thread3.start()
         threads.append(thread3)
         
@@ -392,29 +398,63 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         
         self.filesClass.CloseDatabase()
         self.log("Сервис завершил работу")
+        
+    def get_disk_busy_time_pdh(drive_letter="C"):
+        try:
+            counter_path = win32pdh.MakeCounterPath(
+                (None, "PhysicalDisk", f"{drive_letter}:", None, 0, "% Disk Time")
+            )
+
+            query = win32pdh.OpenQuery()
+            counter_handle = win32pdh.AddCounter(query, counter_path)
+            
+            win32pdh.CollectQueryData(query)
+            time.sleep(1)
+            win32pdh.CollectQueryData(query)
+
+            value = win32pdh.GetFormattedCounterValue(counter_handle, win32pdh.PDH_FMT_DOUBLE)[1]
+
+            win32pdh.CloseQuery(query)
+            
+            return float(value)
+        except Exception as e:
+            print(f"PDH error: {e}")
+            return 0.0
     
     def log(self, message):
         with open(self.log_file, "a", encoding="utf-8") as f:
             f.write(f"{time.ctime()}: {message}\n")
 
 if __name__ == '__main__':
+    get_mita_path()
     if len(sys.argv) > 1:
         if sys.argv[1] == "setup":
             if install_service():
-                print("Запускаем сервис...")
+                print("Сервис запускается...")
                 import win32serviceutil
                 win32serviceutil.StartService("MitaDataCollectionService")
-            elif sys.argv[1] == "debug":
-                service = MitaDataCollectionService([])
-                service.SvcDoRun()
-            else:
-                win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+        elif sys.argv[1] == "debug":
+            print("Сервис запускается...")
+            service = MitaDataCollectionService(["MitaDataCollectionService", "debug"])
+            service.SvcDoRun()
+        else:
+            win32serviceutil.HandleCommandLine(MitaDataCollectionService)
     else:
         if len(sys.argv) == 1:
-            import servicemanager
-            servicemanager.Initialize()
-            servicemanager.PrepareToHostSingle(MitaDataCollectionService)
-            servicemanager.StartServiceCtrlDispatcher()
+            try:
+                import servicemanager
+                servicemanager.Initialize()
+                servicemanager.PrepareToHostSingle(MitaDataCollectionService)
+                servicemanager.StartServiceCtrlDispatcher()
+            except Exception as e:
+                try:
+                    with open("C:/ProgramData/Mita/StartupError.txt", "w") as f:
+                        f.write(f"{time.ctime()}: {e}\n")
+                        import traceback
+                        f.write(traceback.format_exc())
+                except:
+                    pass
+                raise
         else:
             import win32serviceutil
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
