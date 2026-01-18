@@ -3,7 +3,7 @@ import win32service
 import win32event
 import sys
 import time
-from os import path, scandir, makedirs
+from os import path, scandir, makedirs, system
 import json
 import psutil
 import ctypes
@@ -12,7 +12,6 @@ import sqlite3
 import pythoncom
 import wmi
 from threading import Event
-import win32pdh
 
 Mitapath = ""
 
@@ -230,7 +229,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.log_file = "C:/ProgramData/Mita/ServiceLog.txt"
         
         self.user_processes = []
-        self.current_drive = None
+        self.current_drive = "C"
         self.disk_usage_bool = False
         
         self.filesClass = LearnFiles()
@@ -377,11 +376,11 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                     if not thread.is_alive():
                         self.log(f"Поток {i} завершился, перезапускаем...")
                         if i == 0:
-                            self.threads[i] = threading.Thread(target=self.collection_processes_data, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.CollectionFilesData, daemon=True)
                         elif i == 1:
-                            self.threads[i] = threading.Thread(target=self.check_disk_usage, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.CollectionProcessesData, daemon=True)
                         elif i == 2:
-                            self.threads[i] = threading.Thread(target=self.collection_files_data, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.CheckDiskUsage, daemon=True)
                         self.threads[i].start()
                 if int(time.time()) % 30 == 0:
                     self.log("Сервис активен...")
@@ -399,26 +398,14 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.filesClass.CloseDatabase()
         self.log("Сервис завершил работу")
         
-    def get_disk_busy_time_pdh(drive_letter="C"):
+    def get_disk_busy_time_pdh(self, drive_letter="C"):
         try:
-            counter_path = win32pdh.MakeCounterPath(
-                (None, "PhysicalDisk", f"{drive_letter}:", None, 0, "% Disk Time")
-            )
-
-            query = win32pdh.OpenQuery()
-            counter_handle = win32pdh.AddCounter(query, counter_path)
-            
-            win32pdh.CollectQueryData(query)
-            time.sleep(1)
-            win32pdh.CollectQueryData(query)
-
-            value = win32pdh.GetFormattedCounterValue(counter_handle, win32pdh.PDH_FMT_DOUBLE)[1]
-
-            win32pdh.CloseQuery(query)
-            
-            return float(value)
+            import subprocess
+            result = subprocess.run(["powershell", "-Command", f'Get-Counter "\Логический диск(D:)\% активности диска" -ErrorAction SilentlyContinue'], capture_output=True, text=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                return float("".join(result.stdout.split(":")[-1].split()).replace(",", "."))
         except Exception as e:
-            print(f"PDH error: {e}")
+            print(f"PowerShell-Counter error: {e}")
             return 0.0
     
     def log(self, message):
@@ -433,6 +420,7 @@ if __name__ == '__main__':
                 print("Сервис запускается...")
                 import win32serviceutil
                 win32serviceutil.StartService("MitaDataCollectionService")
+                print("Сервис запущен")
         elif sys.argv[1] == "debug":
             print("Сервис запускается...")
             service = MitaDataCollectionService(["MitaDataCollectionService", "debug"])
