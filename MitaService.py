@@ -3,7 +3,7 @@ import win32service
 import win32event
 import sys
 import time
-from os import path, scandir, makedirs, system
+from os import path, scandir, makedirs
 import json
 import psutil
 import ctypes
@@ -155,9 +155,9 @@ class LearnFiles():
                     self.InsertBatchToDB(batch_data)
                     batch_data.clear()
                 return
-            path, depth = self.stack.pop(0)
+            localpath, depth = self.stack.pop(0)
             try:
-                with scandir(path) as elems:
+                with scandir(localpath) as elems:
                     for elem in elems:
                         if elem.is_file():
                             filename, extension = path.splitext(elem.name)
@@ -181,6 +181,7 @@ class LearnFiles():
             
     def InsertBatchToDB(self, batch_data):
         try:
+            print("Происходит сохранение файлов")
             self.cursor.executemany('''
                 INSERT OR IGNORE INTO files (name, extension, path, disk_id)
                 VALUES (?, ?, ?, ?)
@@ -193,9 +194,9 @@ class LearnFiles():
         if hasattr(self, 'conn'):
             self.conn.close()
             
-    def FileExistsInDB(self, filename, extension, path, disk_id):
+    def FileExistsInDB(self, filename, extension, localpath, disk_id):
         try:
-            normalized_path = path.normpath(path).lower().replace('\\\\', '\\')
+            normalized_path = path.normpath(localpath).lower().replace('\\\\', '\\')
             
             self.cursor.execute('''
                 SELECT COUNT(*) FROM files 
@@ -229,8 +230,10 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.log_file = "C:/ProgramData/Mita/ServiceLog.txt"
         
         self.user_processes = []
+        self.user_processes_dict = {}
         self.current_drive = "C"
-        self.disk_usage_bool = False
+        self.disk_usage_bool = True
+        self.threads = []
         
         self.filesClass = LearnFiles()
         
@@ -241,9 +244,6 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
             user_processes = []
             user_processes_names = []
             user_processes_paths = []
-
-            with open(f"{Mitapath}/data/processes_data.json", "r", encoding="utf-8") as f:
-                user_processes_dict = json.load(f)
 
             try:
                 all_processes = psutil.process_iter()
@@ -274,12 +274,12 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                 for i in self.user_processes:
                     user_processes_paths.append(i.exe())
                     user_processes_names.append(i.name()[:-4])
-                    user_processes_dict[i.name()[:-4]] = i.exe()
+                    self.user_processes_dict[i.name()[:-4]] = i.exe()
             except Exception as e:
                 self.log(str(e))
 
             with open(f"{Mitapath}/data/processes_data.json", "w", encoding="utf-8") as f:
-                json.dump(user_processes_dict, f, ensure_ascii=False, indent=4)
+                json.dump(self.user_processes_dict, f, ensure_ascii=False, indent=4)
                 
             self.stop_event.wait(10)
                             
@@ -299,7 +299,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                     
                     try:
                         self.filesClass.LearningFiles(resume=True)
-                        print("Файлы сохранены в базу данных")
+                        self.log("Файлы сохранены в базу данных")
                     except PermissionError as e:
                         self.log(f"Ошибка сканирования диска {disk}: {str(e)}")
                     
@@ -308,22 +308,23 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                 self.log(f"Ошибка в collection_files_data: {str(e)}")
                 self.stop_event.wait(60)
             
-            self.stop_event.wait(3600)
+            if not self.disk_usage_bool: self.stop_event.wait(600)
+            else: self.stop_event.wait(3600)
                 
     def CheckDiskUsage(self):
         while not self.stop_event.is_set():
             try:
                 drive_letter = self.current_drive[0]
                 utilization = self.get_disk_busy_time_pdh(drive_letter)
-                self.log(f"Диск {drive_letter}: загрузка {utilization:.1f}%")
                 
-                if utilization < 50:
+                if utilization < 60:
                     self.disk_usage_bool = True
                 elif utilization > 90:
                     self.disk_usage_bool = False
-            except PermissionError:
+            except PermissionError as e:
                 self.disk_usage_bool = False
-            
+                self.log(f"Не удаётся прочитать загрузку диска. Ошибка: {str(e)}")
+
             self.stop_event.wait(60)
             
     def StartThreads(self):
@@ -355,9 +356,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.ReportServiceStatus(win32service.SERVICE_START_PENDING)
         self.log("Сервис запускается...")
         
-        try:
-            self.log("Инициализация...")
-            
+        try:           
             def start_threads_async():
                 self.threads = self.StartThreads()
             
@@ -382,7 +381,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                         elif i == 2:
                             self.threads[i] = threading.Thread(target=self.CheckDiskUsage, daemon=True)
                         self.threads[i].start()
-                if int(time.time()) % 30 == 0:
+                if int(time.time()) % 600 == 0:
                     self.log("Сервис активен...")
         except Exception as e:
             self.log(f"Критическая ошибка в SvcDoRun: {str(e)}")
@@ -401,7 +400,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def get_disk_busy_time_pdh(self, drive_letter="C"):
         try:
             import subprocess
-            result = subprocess.run(["powershell", "-Command", f'Get-Counter "\Логический диск(D:)\% активности диска" -ErrorAction SilentlyContinue'], capture_output=True, text=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
+            result = subprocess.run(["powershell", "-Command", f'Get-Counter "\Логический диск({drive_letter}:)\% активности диска" -ErrorAction SilentlyContinue'], capture_output=True, text=True, check=True, creationflags=subprocess.CREATE_NO_WINDOW)
             if result.returncode == 0:
                 return float("".join(result.stdout.split(":")[-1].split()).replace(",", "."))
         except Exception as e:
@@ -425,6 +424,7 @@ if __name__ == '__main__':
             print("Сервис запускается...")
             service = MitaDataCollectionService(["MitaDataCollectionService", "debug"])
             service.SvcDoRun()
+            print("Сервис запущен")
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
     else:
