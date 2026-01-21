@@ -64,7 +64,7 @@ class LearnFiles():
         self.disks = {}
         # self.extensions = ['.png', '.jpg', '.jpeg', '.rtf']
         self.black_list = [".vscode", "Microsoft"]
-        self.max_depth = 10
+        self.max_depth = 15
         
     def init_database(self):
         self.conn = sqlite3.connect(f'{Mitapath}/data/files.db', check_same_thread=False)
@@ -229,7 +229,6 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         makedirs("C:/ProgramData/Mita", exist_ok=True)
         self.log_file = "C:/ProgramData/Mita/ServiceLog.txt"
         
-        self.user_processes = []
         self.user_processes_dict = {}
         self.current_drive = "C"
         self.disk_usage_bool = True
@@ -242,44 +241,53 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def CollectionProcessesData(self):
         while not self.stop_event.is_set():
             user_processes = []
-            user_processes_names = []
-            user_processes_paths = []
+            seen_exes = set()
 
             try:
                 all_processes = psutil.process_iter()
                 for p in all_processes:
-                    if p.username() == psutil.Process().username():
-                        if p.pid >= 1000:
-                            if p.status() == psutil.STATUS_RUNNING:
-                                for s in range(len(p.exe())):
-                                    if s >= 10:
-                                        break
-                                    if p.exe()[s] == "C:\Windows"[s]:
-                                        continue
-                                    else:
-                                        user_processes.append(p)
-                                        break
-                
-                for i in range(len(user_processes) - 1):
-                    if i > 0:
-                        for ii in range(i-1, 0, -1):
-                            try:
-                                if user_processes[i].exe() == user_processes[ii].exe():
-                                    break
-                            except psutil.NoSuchProcess:
-                                pass
-                        else:
-                            self.user_processes.append(user_processes[i])
-                            
-                for i in self.user_processes:
-                    user_processes_paths.append(i.exe())
-                    user_processes_names.append(i.name()[:-4])
-                    self.user_processes_dict[i.name()[:-4]] = i.exe()
+                    process_user = p.username()
+                    if '\\' in process_user: process_user_name = process_user.split('\\')[-1]
+                    elif '/' in process_user: process_user_name = process_user.split('/')[-1]
+                    else: process_user_name = process_user
+                    
+                    if process_user_name.lower() != get_downloaded_user()['active_user'].lower():
+                        continue
+                        
+                    if p.pid < 1000:
+                        continue
+                    if p.status() != psutil.STATUS_RUNNING:
+                        continue
+                    
+                    exe_path = p.exe()
+                    if not exe_path:
+                        continue
+                    
+                    if exe_path.lower().startswith('c:\\windows'):
+                        continue
+                    
+                    if exe_path in seen_exes:
+                        continue
+                    seen_exes.add(exe_path)
+                    
+                    user_processes.append(p)
             except Exception as e:
                 self.log(str(e))
-
-            with open(f"{Mitapath}/data/processes_data.json", "w", encoding="utf-8") as f:
-                json.dump(self.user_processes_dict, f, ensure_ascii=False, indent=4)
+                
+            for proc in user_processes:
+                try:
+                    proc_name = proc.name()
+                    if proc_name.lower().endswith('.exe'):
+                        proc_name = proc_name[:-4]
+                    self.user_processes_dict[proc_name] = proc.exe()
+                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                    continue    
+                
+            try:
+                with open(f"{Mitapath}/data/processes_data.json", "w", encoding="utf-8") as f:
+                    json.dump(self.user_processes_dict, f, ensure_ascii=False, indent=4)
+            except Exception as e:
+                self.log(f"Ошибка записи в JSON: {str(e)}")
                 
             self.stop_event.wait(10)
                             
@@ -308,8 +316,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                 self.log(f"Ошибка в collection_files_data: {str(e)}")
                 self.stop_event.wait(60)
             
-            if not self.disk_usage_bool: self.stop_event.wait(600)
-            else: self.stop_event.wait(3600)
+            self.stop_event.wait(600)
                 
     def CheckDiskUsage(self):
         while not self.stop_event.is_set():
