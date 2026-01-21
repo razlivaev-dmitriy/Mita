@@ -10,22 +10,17 @@ try:
     import os
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
     import webbrowser as webb
-    # import pyttsx3 as p3
     import json
-    # from TTS.api import TTS
     import torch
     import sounddevice as sd
     import screen_brightness_control as sbc
     import numpy as np
     from scipy import signal
-    # from pydub import AudioSegment
     from sound import Sound
     from selenium.webdriver import Chrome
     from selenium.webdriver.chrome.options import Options
-    # from selenium.webdriver.chrome.service import Service
-    # import chromedriver_autoinstaller
     from bs4 import BeautifulSoup
-    from re import sub #, split
+    from re import sub
     import winreg as reg
     from explorer import Explorer, path_of_this_file, username, current_drive
     import threading
@@ -214,6 +209,7 @@ try:
 
     def CheckThread(rem_dict):
         while 1:
+            GetProgramsByJSON()
             CheckReminders(rem_dict)
             exp.CheckExplorer()
             CheckInternetConnection()
@@ -233,11 +229,14 @@ try:
             connection = False
 
     def GetProgrammPathByName(programmName: str):
+        GetProgramsByJSON()
         return user_processes_dict[programms[programmName]]
     
     def GetProgramsByJSON():
+        global programms, user_processes_dict
         with open(f"{path_of_this_file}/data/processes_data.json", "r", encoding="utf-8") as f:
             founded_programs = json.load(f)
+        user_processes_dict.update(founded_programs)
         for fp in founded_programs:
             programm_name = fp.lower()
             if programm_name not in [i.lower() for i in programms.values()]:
@@ -655,7 +654,7 @@ try:
     # print(RenameFile("D:/Downloads/тест.txt", "текст2.txt"))
     # print(RemoveFile("D:/Downloads/words_to_numbers_from_RDI.py"))
     # print(StartProgramm("C:/Users/Admin/AppData/Local/WarThunder/launcher.exe"))
-    print(Voice("Привет!"))
+    # print(Voice("Привет!"))
     # print(OpenURL("https://www.google.com/search?q=%D0%BF%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B4%D1%87%D0%B8%D0%BA&oq=&gs_lcrp=EgZjaHJvbWUqCQgAECMYJxjqAjIJCAAQIxgnGOoCMgkIARAjGCcY6gIyCQgCECMYJxjqAjIJCAMQIxgnGOoCMgkIBBAjGCcY6gIyCQgFECMYJxjqAjIJCAYQIxgnGOoCMgkIBxAjGCcY6gLSAQg1ODFqMGoxNagCCLACAQ&sourceid=chrome&ie=UTF-8"))
     # print(RequestToBrowser("переводчик"))
     # print(LearnPathsLaunchedProcesses())
