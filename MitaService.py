@@ -42,19 +42,16 @@ def install_service():
         print("=" * 50)
         
         import win32serviceutil
-        import win32service
         
-        script_path = path.abspath(__file__)
-        
-        win32serviceutil.InstallService(
-            pythonClassString=None,
-            serviceName="MitaDataCollectionService",
-            displayName="Mita Data Collection Service",
-            description="Сервис сбора необходимых данных для голосового ассистента Мита",
-            startType=win32service.SERVICE_AUTO_START,
-            exeName=sys.executable,
-            exeArgs=f'"{script_path}"'
-        )
+        try:
+            win32serviceutil.StopService("MitaDataCollectionService")
+            win32serviceutil.RemoveService("MitaDataCollectionService")
+        except:
+            pass
+        time.sleep(2)
+
+        sys.argv = [sys.argv[0], "install"]
+        win32serviceutil.HandleCommandLine(MitaDataCollectionService)
         print("Сервис установлен успешно")
         return True
         
@@ -460,6 +457,7 @@ if __name__ == '__main__':
         else:
             import win32serviceutil
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
 
 
