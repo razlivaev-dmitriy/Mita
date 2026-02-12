@@ -16,7 +16,7 @@ from threading import Event
 Mitapath = ""
 
 def get_downloaded_user():
-    with open(f"C:/ProgramData/Mita/config.json", 'r', encoding='utf-8') as f:
+    with open(f"C:/Mita/config.json", 'r', encoding='utf-8') as f:
         install_info = json.load(f)
     return install_info
         
@@ -451,3 +451,4 @@ if __name__ == '__main__':
             service.SvcDoRun()
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
