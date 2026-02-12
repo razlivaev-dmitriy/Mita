@@ -41,8 +41,6 @@ def install_service():
         print(f"Аргументы: {sys.argv}")
         print("=" * 50)
         
-        import win32serviceutil
-        
         try:
             win32serviceutil.StopService("MitaDataCollectionService")
             win32serviceutil.RemoveService("MitaDataCollectionService")
@@ -428,7 +426,6 @@ if __name__ == '__main__':
         if sys.argv[1] == "setup":
             if install_service():
                 print("Сервис запускается...")
-                import win32serviceutil
                 win32serviceutil.StartService("MitaDataCollectionService")
                 print("Сервис запущен")
         elif sys.argv[1] == "debug":
@@ -455,8 +452,8 @@ if __name__ == '__main__':
                     pass
                 raise
         else:
-            import win32serviceutil
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
 
 
