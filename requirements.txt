@@ -6,11 +6,8 @@ bs4
 sounddevice
 screen_brightness_control
 matplotlib
-ruaccent
-TeraTTS
 keyboard
 pygetwindow
-keras
 coqpit
 flask
 gradio
@@ -53,7 +50,7 @@ face_recognition
 opencv-python
 wim
 pywin32
-pygame
+pygametorch
 soundfile
 gdown
 umap-learn==0.5.3
@@ -75,6 +72,7 @@ click==8.0.0
 typer==0.9.4
 blis==0.7.11
 librosa==0.10.0
+
 
 
 
