@@ -32,6 +32,14 @@ def install_service():
         if not ctypes.windll.shell32.IsUserAnAdmin():
             print("Требуются права администратора!")
             return False
+
+        print("=" * 50)
+        print("Диагностика:")
+        print(f"Админ права: {ctypes.windll.shell32.IsUserAnAdmin()}")
+        print(f"Python: {sys.executable}")
+        print(f"Рабочая директория: {os.getcwd()}")
+        print(f"Аргументы: {sys.argv}")
+        print("=" * 50)
         
         import win32serviceutil
         import win32service
@@ -453,3 +461,4 @@ if __name__ == '__main__':
         else:
             import win32serviceutil
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
