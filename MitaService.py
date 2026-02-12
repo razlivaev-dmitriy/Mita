@@ -37,7 +37,6 @@ def install_service():
         print("Диагностика:")
         print(f"Админ права: {ctypes.windll.shell32.IsUserAnAdmin()}")
         print(f"Python: {sys.executable}")
-        print(f"Рабочая директория: {os.getcwd()}")
         print(f"Аргументы: {sys.argv}")
         print("=" * 50)
         
@@ -453,6 +452,7 @@ if __name__ == '__main__':
                 raise
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
 
 
