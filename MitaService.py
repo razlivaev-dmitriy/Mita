@@ -33,22 +33,18 @@ def install_service():
             print("Требуются права администратора!")
             return False
 
-        print("=" * 50)
-        print("Диагностика:")
-        print(f"Админ права: {ctypes.windll.shell32.IsUserAnAdmin()}")
-        print(f"Python: {sys.executable}")
-        print(f"Аргументы: {sys.argv}")
-        print("=" * 50)
+        script_path = path.abspath(__file__)
         
-        try:
-            win32serviceutil.StopService("MitaDataCollectionService")
-            win32serviceutil.RemoveService("MitaDataCollectionService")
-        except:
-            pass
-        time.sleep(2)
-
-        sys.argv = [sys.argv[0], "install"]
-        win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+        win32serviceutil.InstallService(
+            pythonClassString=None,
+            serviceName="MitaDataCollectionService",
+            displayName="Mita Data Collection Service",
+            description="Сервис сбора необходимых данных для голосового ассистента Мита",
+            startType=win32service.SERVICE_AUTO_START,
+            exeName=sys.executable,
+            exeArgs=f'"{script_path}"'
+        )
+        
         print("Сервис установлен успешно")
         return True
         
@@ -452,6 +448,7 @@ if __name__ == '__main__':
                 raise
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
 
 
