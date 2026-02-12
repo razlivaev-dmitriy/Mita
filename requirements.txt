@@ -49,7 +49,6 @@ kaggle
 cython
 winshell
 win10toast
-dlib-19.22.99-cp310-cp310-win_amd64.whl
 face_recognition
 opencv-python
 wim
@@ -76,6 +75,7 @@ click==8.0.0
 typer==0.9.4
 blis==0.7.11
 librosa==0.10.0
+
 
 
 
