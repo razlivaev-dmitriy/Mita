@@ -32,6 +32,13 @@ def install_service():
         if not ctypes.windll.shell32.IsUserAnAdmin():
             print("Требуются права администратора!")
             return False
+        
+        try:
+            win32serviceutil.StopService("MitaDataCollectionService")
+            win32serviceutil.RemoveService("MitaDataCollectionService")
+            time.sleep(2)
+        except:
+            pass
 
         script_path = path.abspath(__file__)
         
@@ -41,7 +48,7 @@ def install_service():
             displayName="Mita Data Collection Service",
             description="Сервис сбора необходимых данных для голосового ассистента Мита",
             startType=win32service.SERVICE_AUTO_START,
-            exeName=sys.executable,
+            exeName="C:/Mita/Python310/python.exe",
             exeArgs=f'"{script_path}"'
         )
         
@@ -417,41 +424,30 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
 
 if __name__ == '__main__':
     get_mita_path()
-    if len(sys.argv) > 1:
+    
+    if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1].lower() == 'mitadatacollectionservice'):
+        try:
+            import servicemanager
+            servicemanager.Initialize()
+            servicemanager.PrepareToHostSingle(MitaDataCollectionService)
+            servicemanager.StartServiceCtrlDispatcher()
+        except Exception as e:
+            with open("C:/ProgramData/Mita/StartupError.txt", "w") as f:
+                f.write(f"{time.ctime()}: {e}\n")
+                import traceback
+                f.write(traceback.format_exc())
+            raise
+    else:
         if sys.argv[1] == "setup":
             if install_service():
                 print("Сервис запускается...")
-                win32serviceutil.StartService("MitaDataCollectionService")
-                print("Сервис запущен")
-        elif sys.argv[1] == "debug":
-            print("Сервис запускается...")
-            service = MitaDataCollectionService(["MitaDataCollectionService", "debug"])
-            service.SvcDoRun()
-            print("Сервис запущен")
-        else:
-            win32serviceutil.HandleCommandLine(MitaDataCollectionService)
-    else:
-        if len(sys.argv) == 1:
-            try:
-                import servicemanager
-                servicemanager.Initialize()
-                servicemanager.PrepareToHostSingle(MitaDataCollectionService)
-                servicemanager.StartServiceCtrlDispatcher()
-            except Exception as e:
                 try:
-                    with open("C:/ProgramData/Mita/StartupError.txt", "w") as f:
-                        f.write(f"{time.ctime()}: {e}\n")
-                        import traceback
-                        f.write(traceback.format_exc())
-                except:
-                    pass
-                raise
+                    win32serviceutil.StartService("MitaDataCollectionService")
+                    print("Сервис запущен")
+                except Exception as e:
+                    print(f"Ошибка запуска: {e}")
+        elif sys.argv[1] == "debug":
+            service = MitaDataCollectionService([None, "debug"])
+            service.SvcDoRun()
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
-
-
-
-
-
-
-
