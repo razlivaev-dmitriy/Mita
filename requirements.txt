@@ -1,5 +1,5 @@
 setuptools
-cmake
+dlib-bin
 customtkinter
 psutil
 selenium
@@ -76,4 +76,5 @@ click==8.0.0
 typer==0.9.4
 blis==0.7.11
 librosa==0.10.0
+
 
