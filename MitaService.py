@@ -55,12 +55,13 @@ def install_service():
             exeName=sys.executable,
             exeArgs=f'"{script_path}"'
         )
-        
+        input()
         print("Сервис установлен успешно")
         return True
         
     except Exception as e:
         print(f"Ошибка установки: {e}")
+        input()
         return False
     
 class LearnFiles():
@@ -434,7 +435,9 @@ if __name__ == '__main__':
                 print("Сервис запускается...")
                 import win32serviceutil
                 win32serviceutil.StartService("MitaDataCollectionService")
+                input()
                 print("Сервис запущен")
+            input()
         elif sys.argv[1] == "debug":
             print("Сервис запускается...")
             service = MitaDataCollectionService(["MitaDataCollectionService", "debug"])
@@ -461,4 +464,5 @@ if __name__ == '__main__':
         else:
             import win32serviceutil
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
