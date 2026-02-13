@@ -16,7 +16,6 @@ wmi
 pywin32
 soundfile
 sounddevice
-gdown
 pyaudio
 comtypes
 torch==2.3.1
