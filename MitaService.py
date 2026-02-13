@@ -69,6 +69,7 @@ class LearnFiles():
         # self.extensions = ['.png', '.jpg', '.jpeg', '.rtf']
         self.black_list = [".vscode", "Microsoft"]
         self.max_depth = 15
+        self.letter_to_disk = {}
         
     def init_database(self):
         self.conn = sqlite3.connect(f'{Mitapath}/data/files.db', check_same_thread=False)
@@ -90,6 +91,7 @@ class LearnFiles():
 
     def GetDisksInfo(self):
         self.disks.clear()
+        self.letter_to_disk.clear()
         summary = [[], [], []]
         try:
             pythoncom.CoInitialize()
@@ -128,20 +130,17 @@ class LearnFiles():
                             if part_to_logical.Antecedent.DeviceID == partition_id:
                                 logical_disk_id = part_to_logical.Dependent.DeviceID
                                 self.disks[ph_disk["model"]].append((logical_disk_id, partition_id))
+
+            for disk_model, partitions in self.disks.items():
+                for logical_disk, partition_id in partitions:
+                    self.letter_to_disk[logical_disk.upper()] = disk_model
                 
             return c
         finally:
             pythoncom.CoUninitialize()
     
     def GetDiskByLetter(self, letter):
-        for key, value in self.disks.items():
-            try:
-                if value[0][0].upper() == letter.upper():
-                    return key
-            except:
-                continue
-        
-        return ""
+        return self.letter_to_disk.get(letter.upper(), "")
             
     def LearningFiles(self, resume=True):
         iteration_count = 0
@@ -451,4 +450,5 @@ if __name__ == '__main__':
             service.SvcDoRun()
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
