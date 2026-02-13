@@ -3,7 +3,7 @@ import win32service
 import win32event
 import sys
 import time
-from os import path, scandir, makedirs
+from os import path, scandir
 import json
 import psutil
 import ctypes
@@ -229,8 +229,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.is_alive = True
         self.stop_event = threading.Event()
         
-        makedirs("C:/ProgramData/Mita", exist_ok=True)
-        self.log_file = "C:/ProgramData/Mita/ServiceLog.txt"
+        self.log_file = "C:/Mita/ServiceLog.txt"
         
         self.user_processes_dict = {}
         self.current_drive = "C"
@@ -450,5 +449,4 @@ if __name__ == '__main__':
             service.SvcDoRun()
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
-
 
