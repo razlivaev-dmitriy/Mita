@@ -352,7 +352,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
 Свободная оперативная память: {self.mem_free} Гб
 Нагрузка на диск: {self.disk_usage}%""")
             
-            self.stop_event.wait(30)
+            self.stop_event.wait(10)
             
     def StartThreads(self):
         threads = []
@@ -471,4 +471,5 @@ if __name__ == '__main__':
             service.SvcDoRun()
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
+
 
