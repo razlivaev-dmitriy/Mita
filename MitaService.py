@@ -231,6 +231,11 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         
         self.log_file = "C:/Mita/ServiceLog.txt"
         
+        self.cpu_percent = psutil.cpu_percent()
+        self.mem_free = 0
+        self.disk_usage = 0
+        self.workload_file = f"{Mitapath}/data/workload.txt"
+        
         self.user_processes_dict = {}
         self.current_drive = "C"
         self.disk_usage_bool = True
@@ -323,8 +328,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def CheckDiskUsage(self):
         while not self.stop_event.is_set():
             try:
-                drive_letter = self.current_drive[0]
-                utilization = self.get_disk_busy_time_pdh(drive_letter)
+                utilization = self.disk_usage
                 
                 if utilization < 60:
                     self.disk_usage_bool = True
@@ -335,6 +339,20 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                 self.log(f"Не удаётся прочитать загрузку диска. Ошибка: {str(e)}")
 
             self.stop_event.wait(60)
+            
+    def CheckPCWorkload(self):
+        while not self.stop_event.is_set():
+            self.cpu_percent = psutil.cpu_percent()
+            self.mem_free = psutil.virtual_memory().available/1024/1024/1024
+            drive_letter = self.current_drive[0]
+            self.disk_usage = self.get_disk_busy_time_pdh(drive_letter)
+            
+            with open(self.workload_file, "w", encoding="utf-8") as f:
+                f.write(f"""Нагрузка на процессор: {self.cpu_percent}%
+Свободная оперативная память: {self.mem_free} Гб
+Нагрузка на диск: {self.disk_usage}%""")
+            
+            self.stop_event.wait(30)
             
     def StartThreads(self):
         threads = []
@@ -350,6 +368,10 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         thread3 = threading.Thread(target=self.CheckDiskUsage, daemon=True)
         thread3.start()
         threads.append(thread3)
+        
+        thread4 = threading.Thread(target=self.CheckPCWorkload(), daemon=True)
+        thread4.start()
+        threads.append(thread4)
         
         self.log("Все потоки запущены")
         return threads
