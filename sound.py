@@ -1,12 +1,10 @@
-from ctypes import cast, POINTER
-from comtypes import CLSCTX_ALL
-from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
+from pycaw.pycaw import AudioUtilities
 
 class Sound():
-    def __init__(self, is_muted):
-        self.volume = cast(AudioUtilities.GetSpeakers().Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None), POINTER(IAudioEndpointVolume))
-        self.current_volume = self.volume.GetMasterVolumeLevelScalar(None)
-        self.is_muted = is_muted
+    def __init__(self):
+        self.volume = AudioUtilities.GetSpeakers().EndpointVolume
+        self.current_volume = self.volume.GetMasterVolumeLevelScalar()
+        self.is_muted = self.volume.GetMute()
 
     def mute(self):
         if not self.is_muted:
