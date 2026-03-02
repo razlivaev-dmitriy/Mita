@@ -234,7 +234,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.cpu_percent = psutil.cpu_percent()
         self.mem_free = 0
         self.disk_usage = 0
-        self.workload_file = f"{Mitapath}/data/workload.txt"
+        self.workload_file = f"{Mitapath}/data/workload.json"
         
         self.user_processes_dict = {}
         self.current_drive = "C"
@@ -347,12 +347,16 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
             drive_letter = self.current_drive[0]
             self.disk_usage = self.get_disk_busy_time_pdh(drive_letter)
             
-            with open(self.workload_file, "w", encoding="utf-8") as f:
-                f.write(f"""Нагрузка на процессор: {self.cpu_percent}%
-Свободная оперативная память: {self.mem_free} Гб
-Нагрузка на диск: {self.disk_usage}%""")
+            workload_info = {
+                "CPU percent (%)": self.cpu_percent,
+                "Free RAM (Gb)": self.mem_free,
+                "Disk usage (%)": self.disk_usage
+            }
             
-            self.stop_event.wait(10)
+            with open(self.workload_file, 'w', encoding='utf-8') as f:
+                json.dump(workload_info, f, indent=2, ensure_ascii=False)
+            
+            self.stop_event.wait(30)
             
     def StartThreads(self):
         threads = []
@@ -471,5 +475,4 @@ if __name__ == '__main__':
             service.SvcDoRun()
         else:
             win32serviceutil.HandleCommandLine(MitaDataCollectionService)
-
 
