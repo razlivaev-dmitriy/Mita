@@ -17,8 +17,6 @@ try:
     import numpy as np
     from scipy import signal
     from sound import Sound
-    from selenium.webdriver import Chrome
-    from selenium.webdriver.chrome.options import Options
     from bs4 import BeautifulSoup
     from re import sub
     import winreg as reg
@@ -26,9 +24,10 @@ try:
     import threading
     from contextlib import contextmanager
 
-
     os.system("pip install --upgrade pip > NUL 2>&1")
     os.system("pip install --upgrade selenium > NUL 2>&1")
+    from selenium.webdriver import Chrome
+    from selenium.webdriver.chrome.options import Options
     print("Установка необходимых зависимостей завершена")
     
 
@@ -190,7 +189,7 @@ try:
 
     def SoundPrepare():
         global sound
-        sound = Sound(None, False)
+        sound = Sound()
 # 
 
 
@@ -617,50 +616,11 @@ try:
     GetProgramsByJSON()
     print("\r6/9", end="", flush=True)
 
-    # Осторожно! ↓ Не работает!
-    # LearnPathsOpenedFiles()
-
-    # with open(f"{path_of_this_file}\\files_data.json", "r", encoding="utf-8") as f:
-    #     print(json.load(f))
-
     thread1 = threading.Thread(target=CheckThread, args=(reminders,))
     thread1.start()
     print("\r7/9", end="", flush=True)
     print("\rЗагрузка завершена")
-
-    # with open(f"{path_of_this_file}processes_data.json", "r", encoding="utf-8") as f:
-    #     print(json.load(f))
     
-    # ТЕСТЫ
-    # Voice(["Привет, меня зовут Мита. Я ваш голосовой ассистент, помощник в управлении компьютером"])
-    # Voice(["А это моя вторая фраза"])
-    # print(user_files_dict)
-    # print(user_processes_true)
-    # print(OpenFile(["gramota.pdf"]))
-    #print(SetScreenBrightness([70]))
-    #print(UpScreenBrightness([35]))
-    #print(DownScreenBrightness([50]))
-    # print(RemoveProgrammFromAutoStart())
-    # print(UnzippingFiles(r"D:\From desktop\programms systems and projects\vs code\VS Code\other codes\NeuroCoreModificated.zip"))
-    # print(ZippingFiles(r"D:\From desktop\programms systems and projects\vs code\VS Code\other codes\Kvantoriada_2024\NeuroCoreModificated"))
-    # print(LearnCountOfTextsByParse("Пельмени"))
-    # print(Parse(["александр сергеевич пушкин"]))
-    # print(SetSound([50]))
-    # print(UpSound([30]))
-    # print(DownSound([20]))
-    # print(MuteSound())
-    # print(DemuteSound())
-    # print(SetProgrammToAutoStart())
-    # print(RenameFile("D:/Downloads/тест.txt", "текст2.txt"))
-    # print(RemoveFile("D:/Downloads/words_to_numbers_from_RDI.py"))
-    # print(StartProgramm("C:/Users/Admin/AppData/Local/WarThunder/launcher.exe"))
-    # print(Voice("Привет!"))
-    # print(OpenURL("https://www.google.com/search?q=%D0%BF%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B4%D1%87%D0%B8%D0%BA&oq=&gs_lcrp=EgZjaHJvbWUqCQgAECMYJxjqAjIJCAAQIxgnGOoCMgkIARAjGCcY6gIyCQgCECMYJxjqAjIJCAMQIxgnGOoCMgkIBBAjGCcY6gIyCQgFECMYJxjqAjIJCAYQIxgnGOoCMgkIBxAjGCcY6gLSAQg1ODFqMGoxNagCCLACAQ&sourceid=chrome&ie=UTF-8"))
-    # print(RequestToBrowser("переводчик"))
-    # print(LearnPathsLaunchedProcesses())
-    # print(VoicePro('Очень много текста'))
-    # print(CloseProgramm("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"))
-    # print(QuitComputer(10))
 except Exception as e:
     print(str(e))
     input()
