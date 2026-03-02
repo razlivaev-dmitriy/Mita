@@ -4,7 +4,6 @@ selenium
 bs4
 sounddevice
 screen_brightness_control
-keyboard
 pygetwindow
 scipy
 requests
@@ -21,5 +20,6 @@ pycaw
 torch==2.3.1
 numpy==1.26.4
 vosk==0.3.38
+
 
 
