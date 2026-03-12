@@ -350,7 +350,8 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
             workload_info = {
                 "CPU percent (%)": self.cpu_percent,
                 "Free RAM (Gb)": self.mem_free,
-                "Disk usage (%)": self.disk_usage
+                "Disk usage (%)": self.disk_usage,
+                "Disks": self.filesClass.disks
             }
             
             with open(self.workload_file, 'w', encoding='utf-8') as f:
