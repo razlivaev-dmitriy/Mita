@@ -9,6 +9,7 @@ try:
     sleep(0.1)
     import os
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+    from sound import Sound
     import webbrowser as webb
     import json
     import torch
@@ -16,11 +17,10 @@ try:
     import screen_brightness_control as sbc
     import numpy as np
     from scipy import signal
-    from sound import Sound
     from bs4 import BeautifulSoup
     from re import sub
     import winreg as reg
-    from explorer import Explorer, path_of_this_file, username, current_drive
+    from explorer import Explorer, path_of_this_file, username, workload_info
     import threading
     from contextlib import contextmanager
 
@@ -354,7 +354,7 @@ try:
         webb.open(url, new=2)
         return "Этот сайт открыт"
     
-    def Set_reminder(data: list[int, str]):
+    def SetReminder(data: list[int, str]):
         if data is None:
             return ["ЧИСЛО", "ТЕКСТ"]
         set_time = data[0]
@@ -615,12 +615,11 @@ try:
     print("\r5/9", end="", flush=True)
     GetProgramsByJSON()
     print("\r6/9", end="", flush=True)
-
     thread1 = threading.Thread(target=CheckThread, args=(reminders,))
     thread1.start()
     print("\r7/9", end="", flush=True)
     print("\rЗагрузка завершена")
-    
+
 except Exception as e:
     print(str(e))
     input()
