@@ -17,9 +17,7 @@ sounddevice
 pyaudio
 comtypes
 pycaw
+patool
 torch==2.3.1
 numpy==1.26.4
 vosk==0.3.38
-
-
-
