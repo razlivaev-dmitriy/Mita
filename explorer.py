@@ -1,5 +1,5 @@
 import os
-import zipfile
+import patoolib
 import pygetwindow as gw
 import win32gui
 import comtypes.client
@@ -7,10 +7,14 @@ import platform
 import winshell
 import win32com.client
 import pythoncom
+import sqlite3
+import json
+from io import StringIO
+from contextlib import redirect_stdout
 
 shell = win32com.client.Dispatch("WScript.Shell")
 username = os.getlogin()
-path_of_this_file = os.path.dirname((os.path.abspath(__file__))) + "\\"
+path_of_this_file = os.path.dirname((os.path.abspath(__file__)))
 if platform.release() == "10": desktop_path = f"C:\\Users\\{username}\\Desktop"
 elif platform.release() == "11": desktop_path = f"C:\\Users\\{username}\\OneDrive\\Рабочий стол"
 else: desktop_path = "C:\\"
@@ -24,10 +28,17 @@ max_depth = 10
 # files_system = {f"C:\\Users\\{username}": []}
 black_list = [".vscode", "Microsoft", "Windows"]
 
+def getPCWorkload():
+    global workload_info, disks
+    with open(f'{path_of_this_file}/data/workload.json', 'r', encoding='utf-8') as f:
+        workload_info = json.load(f)
+    disks = workload_info["Disks"]
 
 class Explorer():
     def __init__(self, current_path):
         self.current_path = current_path
+        self.conn = sqlite3.connect(f'{path_of_this_file}/data/files.db', check_same_thread=False)
+        self.cursor = self.conn.cursor()
             
     def SearchFilesInDB(self, filename):
         try:
@@ -156,30 +167,45 @@ class Explorer():
         return "Файл удалён"
     
     def ZippingFiles(self, path: str, ziph: str = ""):
-        path = self.LearnFilePath(path)
-        if ziph == "":
-            ziph = os.path.relpath(path, os.path.dirname(path)) + ".zip"
+        # path = self.LearnFilePath(path)
+        if not ziph: ziph = os.path.relpath(path, os.path.dirname(path)) + ".zip"
         try:
-            with zipfile.ZipFile(os.path.dirname(path) + "\\" + ziph, 'a', zipfile.ZIP_DEFLATED) as zipf:
-                for root, _, files in os.walk(path):
-                    for file in files:
-                        print(os.path.join(root, file))
-                        zipf.write(os.path.join(root, file), os.path.join(root, file)[len(path):])
+            cwd = os.getcwd()
+            os.chdir(path)
+            patoolib.create_archive(ziph, os.listdir('.'))
+            os.chdir(cwd)
             return f"Папка {ziph[:-4]} успешно заархивирована"
         except:
-            return f"Произошла ошибка при архивации папки"
+            return "Произошла ошибка при архивации папки"
         
-    def UnzippingFiles(self, path_to_ziph: str):
-        path_to_ziph = self.LearnFilePath(path_to_ziph)
+    def UnzippingFiles(self, path_to_ziph: str, outpath: str = ""):
+        # path_to_ziph = self.LearnFilePath(path_to_ziph)
+        if not outpath: outpath = path_to_ziph.rsplit(".")[0]
         try:
-            os.makedirs(path_to_ziph[:-4], True)
-            with zipfile.ZipFile(path_to_ziph, 'r') as zipf:
-                zipf.extractall(path_to_ziph[:-4])
+            os.makedirs(outpath, exist_ok=True)
+            cwd = os.getcwd()
+            os.chdir(outpath)
+            patoolib.extract_archive(path_to_ziph, outdir=outpath)
+            os.chdir(cwd)
             return "Папка успешно разархивирована"
         except:
             return "Произошла ошибка при разархивации папки"
+        finally:
+            self.RemoveFile(path_to_ziph)
+            
+    def WatchingZippedFiles(self, path_to_ziph: str):
+        # path_to_ziph = self.LearnFilePath(path_to_ziph)
+        try:
+            archive_redirect = StringIO()
+            with redirect_stdout(archive_redirect):
+                patoolib.list_archive(path_to_ziph)
+            archive_list = archive_redirect.getvalue()
+            return archive_list
+        except:
+            return "Произошла ошибка при просмотре папки"
         
 # exp = Explorer("C:\\Users\\Admin")
-# while not stop:
-#     exp.GetDisksInfo()
-#     exp.LearningFiles()
+
+# print(exp.ZippingFiles(r"D:\From desktop\мои файлы\Большие вызовы\2026", r"F:\Загрузки\test.zip"))
+# print(exp.WatchingZippedFiles(r"F:\Загрузки\test.zip"))
+# print(exp.UnzippingFiles(r"F:\Загрузки\test.zip"))
