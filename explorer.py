@@ -9,6 +9,7 @@ import win32com.client
 import pythoncom
 import sqlite3
 import json
+from shutil import move
 from io import StringIO
 from contextlib import redirect_stdout
 
@@ -40,19 +41,27 @@ class Explorer():
         self.conn = sqlite3.connect(f'{path_of_this_file}/data/files.db', check_same_thread=False)
         self.cursor = self.conn.cursor()
             
-    def SearchFilesInDB(self, filename):
+    def SearchFilesInDB(self, filename, extension=None):
         try:
-            self.cursor.execute('''
+            if extension == None:
+                self.cursor.execute('''
+                    SELECT name, extension, path, disk_id FROM files 
+                    WHERE name = ? 
+                ''', (filename,))
+            else:
+                self.cursor.execute('''
                 SELECT name, extension, path, disk_id FROM files 
-                WHERE name LIKE ? 
-            ''', (f'%{filename}%',))
+                WHERE name = ? AND extension LIKE ? 
+            ''', (filename, f'%{extension}%'))
             results = self.cursor.fetchall()
+            existing_files = []
             for result in results:
-                if not os.path.exists(disks[result[3]][1] + str(result[2])):
-                    results.remove(result)
-            return results
+                for i in range(len(disks[result[3]])):
+                    if os.path.exists(disks[result[3]][i][0] + str(result[2])):
+                        existing_files.append(disks[result[3]][i][0] + str(result[2]))
+            return existing_files
         except Exception as e:
-            print(f"Ошибка поиска в базе: {e}")
+            print(f"Ошибка поиска в базе: {str(e)}")
             return []
 
     def ChangeCurrentPath(self, new_path: str):
@@ -89,13 +98,15 @@ class Explorer():
             print(str(e))
             return "Не удалось получить текущий путь к папке в проводнике."
 
-    def LearnFilePath(self, filename: str):
+    def LearnFilePath(self, filename: str, extension: str | None = None):
         print(self.current_path)
         probably_files = []
+        probably_files.extend(self.SearchFilesInDB(filename, extension))
         for i in os.listdir(self.current_path):
             if os.path.splitext(os.path.basename(i))[0] == filename:
                 if not os.path.isdir(i):
-                    probably_files.append(self.current_path + "\\" + i)
+                    if os.path.splitext(os.path.basename(i))[1] == extension or extension == None:
+                        probably_files.append(self.current_path + "\\" + i)
                 else:
                     self.ChangeCurrentPath(self.current_path + "\\" + i)
                     self.LearnFilePath(filename)
@@ -103,7 +114,8 @@ class Explorer():
         for i in os.listdir(desktop_path):
             if os.path.splitext(os.path.basename(i))[0] == filename:
                 if not os.path.isdir(i):
-                    probably_files.append(desktop_path + "\\" + i)
+                    if os.path.splitext(os.path.basename(i))[1] == extension or extension == None:
+                        probably_files.append(desktop_path + "\\" + i)
                 else:
                     self.ChangeCurrentPath(desktop_path + "\\" + i)
                     self.LearnFilePath(filename)
@@ -114,12 +126,12 @@ class Explorer():
                 if target_name:
                     if target_name == filename:
                         if not os.path.isdir(target_name):
-                            probably_files.append(recent_files_path + "\\" + i)
+                            if extension == "lnk" or extension == None:
+                                probably_files.append(recent_files_path + "\\" + i)
                         else:
                             self.ChangeCurrentPath(recent_files_path + "\\" + i)
                             self.LearnFilePath(filename)
             except Exception as e: continue
-        self.SearchFilesInDB(filename)
         if probably_files: return probably_files
         # return self.FindFile(filename)
         return []
@@ -167,45 +179,52 @@ class Explorer():
         return "Файл удалён"
     
     def ZippingFiles(self, path: str, ziph: str = ""):
-        # path = self.LearnFilePath(path)
-        if not ziph: ziph = os.path.relpath(path, os.path.dirname(path)) + ".zip"
+        path = self.LearnFilePath(path, "")[0]
+        if not path: return "Папкаа не найдена"
+        relpath = os.path.dirname(path)
+        if not ziph: ziph = os.path.relpath(path, relpath) + ".zip"
         try:
             cwd = os.getcwd()
             os.chdir(path)
             patoolib.create_archive(ziph, os.listdir('.'))
             os.chdir(cwd)
+            move(path + "\\" + ziph, relpath)
             return f"Папка {ziph[:-4]} успешно заархивирована"
         except:
             return "Произошла ошибка при архивации папки"
         
-    def UnzippingFiles(self, path_to_ziph: str, outpath: str = ""):
-        # path_to_ziph = self.LearnFilePath(path_to_ziph)
+    def UnzippingFiles(self, path_to_ziph: str, outpath: str = "", extension: str | None = None):
+        paths_to_ziph = self.LearnFilePath(path_to_ziph, extension)
         if not outpath: outpath = path_to_ziph.rsplit(".")[0]
-        try:
-            os.makedirs(outpath, exist_ok=True)
-            cwd = os.getcwd()
-            os.chdir(outpath)
-            patoolib.extract_archive(path_to_ziph, outdir=outpath)
-            os.chdir(cwd)
-            return "Папка успешно разархивирована"
-        except:
-            return "Произошла ошибка при разархивации папки"
-        finally:
-            self.RemoveFile(path_to_ziph)
+        for path_to_ziph in paths_to_ziph:
+            if patoolib.is_archive(path_to_ziph):
+                try:
+                    os.makedirs(outpath, exist_ok=True)
+                    cwd = os.getcwd()
+                    os.chdir(outpath)
+                    patoolib.extract_archive(path_to_ziph, outdir=outpath)
+                    os.chdir(cwd)
+                    return "Папка успешно разархивирована"
+                except:
+                    return "Произошла ошибка при разархивации папки"
+                finally:
+                    self.RemoveFile(path_to_ziph)
+        else: 
+            return "Архив не найден"
             
-    def WatchingZippedFiles(self, path_to_ziph: str):
-        # path_to_ziph = self.LearnFilePath(path_to_ziph)
-        try:
-            archive_redirect = StringIO()
-            with redirect_stdout(archive_redirect):
-                patoolib.list_archive(path_to_ziph)
-            archive_list = archive_redirect.getvalue()
-            return archive_list
-        except:
-            return "Произошла ошибка при просмотре папки"
+    def WatchingZippedFiles(self, path_to_ziph: str, extension: str | None = None):
+        paths_to_ziph = self.LearnFilePath(path_to_ziph, extension)
+        for path_to_ziph in paths_to_ziph:
+            if patoolib.is_archive(path_to_ziph):
+                try:
+                    archive_redirect = StringIO()
+                    with redirect_stdout(archive_redirect):
+                        patoolib.list_archive(path_to_ziph)
+                    archive_list = archive_redirect.getvalue()
+                    return archive_list
+                except:
+                    return "Произошла ошибка при просмотре папки"
+        else:
+            return "Архив не найден"
         
-# exp = Explorer("C:\\Users\\Admin")
-
-# print(exp.ZippingFiles(r"D:\From desktop\мои файлы\Большие вызовы\2026", r"F:\Загрузки\test.zip"))
-# print(exp.WatchingZippedFiles(r"F:\Загрузки\test.zip"))
-# print(exp.UnzippingFiles(r"F:\Загрузки\test.zip"))
+getPCWorkload()
