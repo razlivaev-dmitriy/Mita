@@ -78,7 +78,7 @@ class LearnFiles():
             CREATE TABLE IF NOT EXISTS files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                extension TEXT NOT NULL,
+                extension TEXT,
                 path TEXT NOT NULL,
                 disk_id TEXT,
                 UNIQUE(name, extension, path, disk_id)
@@ -144,8 +144,8 @@ class LearnFiles():
             
     def LearningFiles(self, resume=True):
         iteration_count = 0
-        max_iteration_count = 1000 if resume else 10
-        batch_size = 1000
+        max_iteration_count = 5000 if resume else 100
+        batch_size = 25000
         batch_data = []
         while self.stack:
             if iteration_count >= max_iteration_count: 
@@ -162,18 +162,24 @@ class LearnFiles():
             try:
                 with scandir(localpath) as elems:
                     for elem in elems:
+                        letter, path_without_letter = path.splitdrive(elem.path)
+                        disk_id = self.GetDiskByLetter(letter)
                         if elem.is_file():
-                            filename, extension = path.splitext(elem.name)
+                            name, extension = path.splitext(elem.name)
                             # if extension.lower() not in extensions: continue
                             if not extension: continue
-                            letter, path_without_letter = path.splitdrive(elem.path)
-                            disk_id = self.GetDiskByLetter(letter)
-                            if not self.FileExistsInDB(filename, extension, path_without_letter, disk_id):
-                                batch_data.append((filename, extension, path_without_letter, disk_id))
+                            if not self.FileExistsInDB(name, extension, path_without_letter, disk_id):
+                                batch_data.append((name, extension, path_without_letter, disk_id))
                             if len(batch_data) >= batch_size:
                                 self.InsertBatchToDB(batch_data)
                                 batch_data.clear()
                         elif elem.is_dir():
+                            name = elem.name
+                            if not self.FileExistsInDB(name, "", path_without_letter, disk_id):
+                                batch_data.append((name, "", path_without_letter, disk_id))
+                            if len(batch_data) >= batch_size:
+                                self.InsertBatchToDB(batch_data)
+                                batch_data.clear()
                             if elem not in self.black_list and depth < self.max_depth:
                                 self.stack.append((elem.path, depth+1))
             except (PermissionError, OSError):
