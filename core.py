@@ -172,7 +172,7 @@ functions = [StartProgramm,                          # 1
             CloseProgramm,                           # 6
             QuitComputer,                            # 7
             RebootComputer,                          # 8
-            Set_reminder,                            # 9
+            SetReminder,                            # 9
             SetScreenBrightness,                     # 10
             SetSound,                                # 11
             UpSound,                                 # 12
