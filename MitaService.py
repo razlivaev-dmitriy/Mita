@@ -182,11 +182,15 @@ class LearnFiles():
                                 batch_data.clear()
                             if elem not in self.black_list and depth < self.max_depth:
                                 self.stack.append((elem.path, depth+1))
-            except (PermissionError, OSError):
+            except (PermissionError, OSError) as e:
+                print("Ошибка сканирования диска: " + str(e))
                 continue
             iteration_count += 1
         else:
             self.stop.set()
+            if batch_data:
+                self.InsertBatchToDB(batch_data)
+                batch_data.clear()
             
     def InsertBatchToDB(self, batch_data):
         try:
@@ -307,10 +311,14 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
     def CollectionFilesData(self):
         while not self.stop_event.is_set():
             try:
-                disks = [get_downloaded_user().get('profile_path')] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
+                disks = [get_downloaded_user().get('profile_path')] + [d.device for d in psutil.disk_partitions(all=True) if d.fstype and d.device != "C:\\"]
                 for disk in disks:
                     if not self.disk_usage_bool:
                         self.log(f"Диск {disk} загружен, пропускаем сканирование")
+                        continue
+                    
+                    if not path.exists(disk):
+                        self.log(f"Диск {disk} недоступен, пропускаем сканирование")
                         continue
                     
                     self.current_drive = disk
@@ -463,7 +471,7 @@ if __name__ == '__main__':
             servicemanager.PrepareToHostSingle(MitaDataCollectionService)
             servicemanager.StartServiceCtrlDispatcher()
         except Exception as e:
-            with open("C:/ProgramData/Mita/StartupError.txt", "w") as f:
+            with open("C:/Mita/StartupError.txt", "w") as f:
                 f.write(f"{time.ctime()}: {e}\n")
                 import traceback
                 f.write(traceback.format_exc())
