@@ -14,7 +14,6 @@ wmi
 pywin32
 soundfile
 pyaudio
-comtypes
 pycaw
 patool
 torch==2.3.1
