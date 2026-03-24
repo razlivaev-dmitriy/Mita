@@ -13,7 +13,6 @@ opencv-python
 wmi
 pywin32
 soundfile
-sounddevice
 pyaudio
 comtypes
 pycaw
