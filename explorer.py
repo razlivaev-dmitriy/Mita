@@ -2,7 +2,6 @@ import os
 import patoolib
 import pygetwindow as gw
 import win32gui
-import comtypes.client
 import platform
 import winshell
 import win32com.client
@@ -70,7 +69,7 @@ class Explorer():
     def GetExplorerWindowPath(self, MyHwnd):
         try:
             pythoncom.CoInitialize()
-            shell_app = comtypes.client.CreateObject("Shell.Application")
+            shell_app = win32com.client.Dispatch("Shell.Application")
             windows = shell_app.Windows()
             for i in range(windows.Count):
                 explorer_window = windows.Item(i)
