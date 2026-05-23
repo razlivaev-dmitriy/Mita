@@ -1,5 +1,4 @@
 customtkinter
-tkinter
 psutil
 selenium
 bs4
