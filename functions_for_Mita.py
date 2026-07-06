@@ -10,13 +10,10 @@ try:
     import os
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
     from sound import Sound
+    from voice import Voice
     import webbrowser as webb
     import json
-    import torch
-    import sounddevice as sd
     import screen_brightness_control as sbc
-    import numpy as np
-    from scipy import signal
     from bs4 import BeautifulSoup
     from re import sub
     import winreg as reg
@@ -38,8 +35,7 @@ try:
     subKey = r"Software\Microsoft\Windows\CurrentVersion\Run"
     files_learning = False
     disk_usage_bool = True
-    device = torch.device('cpu') if not torch.cuda.is_available() else torch.device('cuda')
-    # device = torch.device('cpu')
+    
 
     en_to_ru_alphabet = {".": " точка ", "shch": "щ", "tion": "шн", "sch": "ск", "chr": "хр", "e ": " ", "e-": "-", "e_": "_", "qw": "кв", "dge": "дж", "ch": "ч", "sh": "ш", "pp": "п", "mm": "м", "ee": "и", "ea": "и", "nn": "н", "oo": "у", "ou": "ау", "ss": "с", "ph": "ф", "th": "т", "wh": "в", "wr": "р", "kn": "н", "ck": "к", "ce": "се", "ci": "си", "cy": "си", "ur": "ёр", "ye": "ай", "a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "г", "h": "х", "i": "и", "j": "дж", "k": "к", "l": "л", "m": "м", "n": "н", "o": "о", "p": "п", "q": "кв", "r": "р", "s": "с", "t": "т", "u": "у", "v": "в", "w": "в", "x": "кс", "y": "и", "z": "з"}#, "Shch": "Щ", "Sch": "Ск", "Qw": "Кв", "Chr": "Хр", "Ch": "Ч", "Sh": "Ш", "Pp": "П", "Mm": "М", "Ee": "И", "Ea": "И", "Nn": "Н", "Oo": "У", "Ss": "С", "Ph": "Ф", "Th": "З", "Wh": "В", "Wr": "Р", "Kn": "Н", "Ck": "К", "Ce": "Се", "Ci": "Си", "Cy": "Си", "A": "Эй", "B": "Би", "C": "Си", "D": "Ди", "E": "И", "F": "Эф", "G": "Джи", "H": "Эйч", "I": "Ай", "J": "Джей", "K": "Кей", "L": "Эл", "M": "Эм", "N": "Эн", "O": "Оу", "P": "Пи", "Q": "Кью", "R": "Ар", "S": "Эс", "T": "ти", "U": "Ю", "V": "Ви", "W": "В", "X": "Икс", "Y": "вай", "Z": "зет"}
 
@@ -173,18 +169,8 @@ try:
         driver = Chrome(options=chrome_options)
 
     def VoicingPrepare():
-        global model, sample_rate, speaker
-        # global device, tts, voice, admin_error
-        # admin_error = np.array(AudioSegment.from_wav(f"{path_of_this_file}admin_error.wav").get_array_of_samples())
-        # device = "cuda" if torch.cuda.is_available() else "cpu"
-        # tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", progress_bar=True).to(device)
-        # voice = p3.init()
-        
-        # model = torch.hub.load(repo_or_dir='snakers4/silero-models', model='silero_tts', language="ru", speaker="v5_ru")
-        model = torch.package.PackageImporter(f"{path_of_this_file}/models/v5_ru.pt").load_pickle("tts_models", "model")
-        model.to(device)
-        sample_rate = 48000
-        speaker = 'xenia'
+        global voice
+        voice = Voice()
 
     def SoundPrepare():
         global sound
@@ -289,42 +275,11 @@ try:
         # webb.open(f"https://yandex.ru/search/?text={request}", new=2)
         pass
 
-    # def VoicePro(texts: list):
-    #    while 1:
-    #        if texts:
-    #             audio = tts.tts(texts[0], speaker_wav=f"{path_of_this_file}audiodata.wav", language="ru")
-    #             sd.play(audio, 23500)
-    #             sd.wait()
-    #             sd.stop()
-    #             texts.pop(0)
-
-    def Voice(data: list[str]):
+    def Say(data: list[str]):
         if data is None:
             return ["ТЕКСТДЛЯОЗВ"]
-        # audio = tts.tts(text, speaker_wav=f"{path_of_this_file}audiodata.wav", language="ru")
-        # sd.play(audio, 23500)
-        # sd.wait()
-        # sd.stop()
-        # return "Мы оставим эту функцию!"
         text = data[0]
-        audio = model.apply_tts(
-            text=text,
-            speaker=speaker,
-            sample_rate=sample_rate,
-            put_accent=True,
-            put_yo=True
-        )
-        speed = 1.09
-        audio = np.array(audio, dtype=np.float32)
-        max_val = np.max(np.abs(audio))
-        if max_val > 0:
-            target_level = 0.7
-            audio = audio * (target_level / max_val)
-        if speed != 1.0:
-            new_length = int(len(audio) / speed)
-            audio = signal.resample(audio, new_length)
-        sd.play(audio, sample_rate)
-        sd.wait()
+        voice.say(f"<speak>{text}</speak>")
 
     def CloseProgramm(data: list[str]):
         if data is None:
