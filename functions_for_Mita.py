@@ -32,7 +32,6 @@ try:
     
 
     user_processes_dict = {}
-    user_processes_true = []
     user_files_dict = {}
     reminders = {}
     hive = reg.HKEY_CURRENT_USER
@@ -236,16 +235,11 @@ try:
         with open(f"{path_of_this_file}/data/processes_data.json", "r", encoding="utf-8") as f:
             founded_programs = json.load(f)
         user_processes_dict.update(founded_programs)
-        for fp in founded_programs:
-            programm_name = fp.lower()
+        for fp_name in founded_programs.keys():
+            programm_name = fp_name.lower()
             if programm_name not in [i.lower() for i in programms.values()]:
-                for letter in en_to_ru_alphabet:
-                    if letter in programm_name:
-                        programm_name = programm_name.replace(letter, en_to_ru_alphabet[letter])
-                if programm_name[-1] == "e":
-                    programm_name = programm_name[:-1]
-                programms.update({programm_name: fp.lower()})
-        # print(programms)
+                programm_name = EnToRuNames(programm_name)
+                programms.update({programm_name: fp_name})
 
     def EnToRuNames(name: str):
         for letter in en_to_ru_alphabet:
@@ -337,10 +331,10 @@ try:
             return ["НЗВФАЙЛА"]
         print(data)
         name = GetProgrammPathByName(data[0])
-        for process in user_processes_true:
+        for pr_name, pr_path in user_processes_dict.items():
             try:
-                if process.exe() == name:
-                    os.system(f"taskkill /im {process.name()} /f")
+                if pr_path == name:
+                    os.system(f"taskkill /im {pr_name}.exe /f")
             except IndexError:
                 print("Такого процесса нет!")
                 return "Такого процесса нет"
