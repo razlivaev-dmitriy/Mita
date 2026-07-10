@@ -180,8 +180,9 @@ class Explorer():
         return "Файл удалён"
     
     def ZippingFiles(self, path: str, ziph: str = ""):
-        path = self.LearnFilePath(path, "")[0]
-        if not path: return "Папкаа не найдена"
+        path = self.LearnFilePath(path, "")
+        if not path: return "Папка не найдена"
+        path = path[0]
         relpath = os.path.dirname(path)
         if not ziph: ziph = os.path.relpath(path, relpath) + ".zip"
         try:
@@ -199,7 +200,7 @@ class Explorer():
         
     def UnzippingFiles(self, path_to_ziph: str, outpath: str = "", extension: str | None = None):
         paths_to_ziph = self.LearnFilePath(path_to_ziph, extension)
-        if not outpath: outpath = path_to_ziph.rsplit(".")[0]
+        if not outpath: outpath = path_to_ziph.rsplit("/")[-1].rsplit("\\")[-1].split(".")[0]
         for path_to_ziph in paths_to_ziph:
             try:
                 os.makedirs(outpath, exist_ok=True)
@@ -223,8 +224,11 @@ class Explorer():
         for path_to_ziph in paths_to_ziph:
             result = subprocess.run(["patool", "list", path_to_ziph], capture_output=True, text=True)
             if result.returncode == 0:
-                archive_list = result.stdout.splitlines()
-                return archive_list
+                archive_list = result.stdout.splitlines()[15:-3]
+                names_list = []
+                for elem in archive_list:
+                    names_list.append(elem.split()[-1])
+                return names_list
             else:
                 return "Произошла ошибка при просмотре папки"
         else:
