@@ -18,7 +18,7 @@ max_depth = 10
 black_list = [".vscode", "Microsoft", "Windows"]
 
 def Prepare():
-    global path_of_this_file, python_path, recent_files_path, path_learned_files, desktop_path, current_drive
+    global username, path_of_this_file, python_path, recent_files_path, path_learned_files, desktop_path, current_drive
     with open(f"C:/Mita/config.json", 'r', encoding='utf-8') as f:
         install_info = json.load(f)
     username = install_info["active_user"]
