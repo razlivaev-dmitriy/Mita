@@ -17,9 +17,10 @@ try:
     from bs4 import BeautifulSoup
     from re import sub
     import winreg as reg
-    from explorer import Explorer, path_of_this_file, username, workload_info
+    from explorer import Explorer, path_of_this_file, username, GetDisksByJSON
     import threading
     from contextlib import contextmanager
+    import socket
 
     os.system("pip install --upgrade pip > NUL 2>&1")
     os.system("pip install --upgrade selenium > NUL 2>&1")
@@ -193,9 +194,9 @@ try:
 
     def CheckThread(rem_dict):
         while 1:
-            GetProgramsByJSON()
             CheckReminders(rem_dict)
             exp.CheckExplorer()
+            GetDisksByJSON()
             CheckInternetConnection()
             sys.stdout.flush()
             sys.stderr.flush()
@@ -213,19 +214,28 @@ try:
             connection = False
 
     def GetProgrammPathByName(programmName: str):
-        GetProgramsByJSON()
+        GetProgramsByLocalhost()
         return user_processes_dict[programms[programmName]]
     
-    def GetProgramsByJSON():
+    def GetProgramsByLocalhost():
         global programms, user_processes_dict
-        with open(f"{path_of_this_file}/data/processes_data.json", "r", encoding="utf-8") as f:
-            founded_programs = json.load(f)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(('127.0.0.1', 9999))
+            sock.sendall("processes".encode("utf-8"))
+            founded_programs = json.loads(sock.recv(16384).decode("utf-8"))
         user_processes_dict.update(founded_programs)
         for fp_name in founded_programs.keys():
             programm_name = fp_name.lower()
             if programm_name not in [i.lower() for i in programms.values()]:
                 programm_name = EnToRuNames(programm_name)
                 programms.update({programm_name: fp_name})
+                
+    def GetPCWorkloadByLocalhost():
+        global workload_info
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(('127.0.0.1', 9999))
+            sock.sendall("workload".encode("utf-8"))
+            workload_info = json.loads(sock.recv(16384).decode("utf-8"))
 
     def EnToRuNames(name: str):
         for letter in en_to_ru_alphabet:
@@ -553,20 +563,22 @@ try:
 
     print("Загрузка...")
     ExplorerPrepare()
-    print("\r1/9", end="", flush=True)
+    print("\r1/8", end="", flush=True)
     VoicingPrepare()
-    print("\r2/9", end="", flush=True)
+    print("\r2/8", end="", flush=True)
     SoundPrepare()
-    print("\r3/9", end="", flush=True)
+    print("\r3/8", end="", flush=True)
     ParsingPrepare()
-    print("\r4/9", end="", flush=True)
+    print("\r4/8", end="", flush=True)
     CheckInternetConnection()
-    print("\r5/9", end="", flush=True)
-    GetProgramsByJSON()
-    print("\r6/9", end="", flush=True)
+    print("\r5/8", end="", flush=True)
+    GetProgramsByLocalhost()
+    print("\r6/8", end="", flush=True)
+    GetPCWorkloadByLocalhost()
+    print("\r7/8", end="", flush=True)
     thread1 = threading.Thread(target=CheckThread, args=(reminders,))
     thread1.start()
-    print("\r7/9", end="", flush=True)
+    print("\r8/8", end="", flush=True)
     print("\rЗагрузка завершена")
 
 except Exception as e:
