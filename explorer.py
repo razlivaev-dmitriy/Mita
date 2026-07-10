@@ -1,5 +1,4 @@
 import os
-import patoolib
 import pygetwindow as gw
 import win32gui
 import platform
@@ -8,31 +7,34 @@ import win32com.client
 import pythoncom
 import sqlite3
 import json
+import subprocess
 from shutil import move
-from io import StringIO
-from contextlib import redirect_stdout
 
 shell = win32com.client.Dispatch("WScript.Shell")
-username = os.getlogin()
-path_of_this_file = os.path.dirname((os.path.abspath(__file__)))
-if platform.release() == "10": desktop_path = f"C:\\Users\\{username}\\Desktop"
-elif platform.release() == "11": desktop_path = f"C:\\Users\\{username}\\OneDrive\\Рабочий стол"
-else: desktop_path = "C:\\"
-# recent_files_path = f"C:\\Users\\{username}\\AppData\\Roaming\\Microsoft\\Windows\\Recent"
-recent_files_path = winshell.recent()
-path_learned_files = f"C:\\Users\\{username}"
 disks = {}
-current_drive = f"C:\\Users\\{username}"
 max_depth = 10
 
 # files_system = {f"C:\\Users\\{username}": []}
 black_list = [".vscode", "Microsoft", "Windows"]
 
-def getPCWorkload():
-    global workload_info, disks
-    with open(f'{path_of_this_file}/data/workload.json', 'r', encoding='utf-8') as f:
-        workload_info = json.load(f)
-    disks = workload_info["Disks"]
+def Prepare():
+    global path_of_this_file, python_path, recent_files_path, path_learned_files, desktop_path, current_drive
+    with open(f"C:/Mita/config.json", 'r', encoding='utf-8') as f:
+        install_info = json.load(f)
+    username = install_info["active_user"]
+    path_of_this_file = install_info["program_path"]
+    python_path = "C:/Mita/Python310"
+    if platform.release() == "10": desktop_path = f"C:\\Users\\{username}\\Desktop"
+    elif platform.release() == "11": desktop_path = f"C:\\Users\\{username}\\OneDrive\\Рабочий стол"
+    else: desktop_path = "C:\\"
+    recent_files_path = winshell.recent()
+    path_learned_files = f"C:\\Users\\{username}"
+    current_drive = f"C:\\Users\\{username}"
+
+def GetDisksByJSON():
+    global disks
+    with open(f"{path_of_this_file}/data/disks.json", "r", encoding="utf-8") as f:
+        disks = json.load(f)["Disks"]
 
 class Explorer():
     def __init__(self, current_path):
@@ -185,10 +187,13 @@ class Explorer():
         try:
             cwd = os.getcwd()
             os.chdir(path)
-            patoolib.create_archive(ziph, os.listdir('.'))
+            result = subprocess.run(["patool", "create", ziph, "."], capture_output=True, text=True)
             os.chdir(cwd)
             move(path + "\\" + ziph, relpath)
-            return f"Папка {ziph[:-4]} успешно заархивирована"
+            if result.returncode == 0:
+                return f"Папка {ziph[:-4]} успешно заархивирована"
+            else:
+                return "Произошла ошибка при архивации папки"
         except:
             return "Произошла ошибка при архивации папки"
         
@@ -196,34 +201,34 @@ class Explorer():
         paths_to_ziph = self.LearnFilePath(path_to_ziph, extension)
         if not outpath: outpath = path_to_ziph.rsplit(".")[0]
         for path_to_ziph in paths_to_ziph:
-            if patoolib.is_archive(path_to_ziph):
-                try:
-                    os.makedirs(outpath, exist_ok=True)
-                    cwd = os.getcwd()
-                    os.chdir(outpath)
-                    patoolib.extract_archive(path_to_ziph, outdir=outpath)
-                    os.chdir(cwd)
+            try:
+                os.makedirs(outpath, exist_ok=True)
+                cwd = os.getcwd()
+                os.chdir(outpath)
+                result = subprocess.run(["patool", "extract", path_to_ziph, "--outdir", outpath], capture_output=True, text=True)
+                os.chdir(cwd)
+                if result.returncode == 0:
                     return "Папка успешно разархивирована"
-                except:
+                else:
                     return "Произошла ошибка при разархивации папки"
-                finally:
-                    self.RemoveFile(path_to_ziph)
+            except:
+                return "Произошла ошибка при разархивации папки"
+            finally:
+                self.RemoveFile(path_to_ziph)
         else: 
             return "Архив не найден"
             
     def WatchingZippedFiles(self, path_to_ziph: str, extension: str | None = None):
         paths_to_ziph = self.LearnFilePath(path_to_ziph, extension)
         for path_to_ziph in paths_to_ziph:
-            if patoolib.is_archive(path_to_ziph):
-                try:
-                    archive_redirect = StringIO()
-                    with redirect_stdout(archive_redirect):
-                        patoolib.list_archive(path_to_ziph)
-                    archive_list = archive_redirect.getvalue()
-                    return archive_list
-                except:
-                    return "Произошла ошибка при просмотре папки"
+            result = subprocess.run(["patool", "list", path_to_ziph], capture_output=True, text=True)
+            if result.returncode == 0:
+                archive_list = result.stdout.splitlines()
+                return archive_list
+            else:
+                return "Произошла ошибка при просмотре папки"
         else:
             return "Архив не найден"
-        
-getPCWorkload()
+  
+Prepare()      
+GetDisksByJSON()
