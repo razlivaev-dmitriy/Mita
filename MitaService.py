@@ -1,6 +1,4 @@
-import win32serviceutil
-import win32service
-import win32event
+import win32serviceutil, win32service, win32event, win32api, win32process
 import sys
 import time
 from os import path, scandir
@@ -12,6 +10,7 @@ import sqlite3
 import pythoncom
 import wmi
 from threading import Event
+import socket
 
 Mitapath = ""
 
@@ -68,8 +67,9 @@ class LearnFiles():
         self.disks = {}
         # self.extensions = ['.png', '.jpg', '.jpeg', '.rtf']
         self.black_list = [".vscode", "Microsoft"]
-        self.max_depth = 15
+        self.max_depth = 20
         self.letter_to_disk = {}
+        self.batch_size = 25000
         
     def init_database(self):
         self.conn = sqlite3.connect(f'{Mitapath}/data/files.db', check_same_thread=False)
@@ -85,9 +85,6 @@ class LearnFiles():
             )
         ''')
         self.conn.commit()
-        
-        with open(f"{Mitapath}/data/processes_data.json", "w", encoding="utf-8") as f:
-            json.dump({}, f, ensure_ascii=False, indent=4)
 
     def GetDisksInfo(self):
         self.disks.clear()
@@ -129,7 +126,7 @@ class LearnFiles():
                         for part_to_logical in c.Win32_LogicalDiskToPartition():
                             if part_to_logical.Antecedent.DeviceID == partition_id:
                                 logical_disk_id = part_to_logical.Dependent.DeviceID
-                                self.disks[ph_disk["model"]].append((logical_disk_id, partition_id))
+                                self.disks[ph_disk["model"]].append([logical_disk_id, partition_id])
 
             for disk_model, partitions in self.disks.items():
                 for logical_disk, partition_id in partitions:
@@ -145,7 +142,6 @@ class LearnFiles():
     def LearningFiles(self, resume=True):
         iteration_count = 0
         max_iteration_count = 5000 if resume else 100
-        batch_size = 25000
         batch_data = []
         while self.stack:
             if iteration_count >= max_iteration_count: 
@@ -170,14 +166,14 @@ class LearnFiles():
                             if not extension: continue
                             if not self.FileExistsInDB(name, extension, path_without_letter, disk_id):
                                 batch_data.append((name, extension, path_without_letter, disk_id))
-                            if len(batch_data) >= batch_size:
+                            if len(batch_data) >= self.batch_size:
                                 self.InsertBatchToDB(batch_data)
                                 batch_data.clear()
                         elif elem.is_dir():
                             name = elem.name
                             if not self.FileExistsInDB(name, "", path_without_letter, disk_id):
                                 batch_data.append((name, "", path_without_letter, disk_id))
-                            if len(batch_data) >= batch_size:
+                            if len(batch_data) >= self.batch_size:
                                 self.InsertBatchToDB(batch_data)
                                 batch_data.clear()
                             if elem not in self.black_list and depth < self.max_depth:
@@ -237,82 +233,119 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
             self.ssh = None
         self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
         self.is_alive = True
+        self.stop_scanning_files = threading.Event()
         self.stop_event = threading.Event()
         
         self.log_file = "C:/Mita/ServiceLog.txt"
+        self.disks_file = f"{Mitapath}/data/disks.json"
         
         self.cpu_percent = psutil.cpu_percent()
         self.mem_free = 0
         self.disk_usage = 0
-        self.workload_file = f"{Mitapath}/data/workload.json"
+        self.workload_info = {}
         
         self.user_processes_dict = {}
         self.current_drive = "C"
         self.disk_usage_bool = True
         self.threads = []
+        self.is_scanning_files = False
         
         self.filesClass = LearnFiles()
+        self.init_disks_json()
+        
+        self.listener = None
+        self.init_localhost()
         
         self.log("Сервис инициализирован")
         
-    def CollectionProcessesData(self):
-        while not self.stop_event.is_set():
-            user_processes = []
-            seen_exes = set()
+    def init_disks_json(self):
+        with open(self.disks_file, "w", encoding="utf-8") as f:
+            f.write("{}")
+            
+    def init_localhost(self):
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.bind(('127.0.0.1', 9999))
+        sock.listen()
+        self.listener = sock
+    
+    def collect_processes_data(self):
+        user_processes = []
+        seen_exes = set()
 
+        try:
+            all_processes = psutil.process_iter()
+            for p in all_processes:
+                process_user = p.username()
+                if '\\' in process_user: process_user_name = process_user.split('\\')[-1]
+                elif '/' in process_user: process_user_name = process_user.split('/')[-1]
+                else: process_user_name = process_user
+                
+                if process_user_name.lower() != get_downloaded_user()['active_user'].lower():
+                    continue
+                    
+                if p.pid < 1000:
+                    continue
+                if p.status() != psutil.STATUS_RUNNING:
+                    continue
+                
+                exe_path = p.exe()
+                if not exe_path:
+                    continue
+                
+                if exe_path.lower().startswith('c:\\windows'):
+                    continue
+                
+                if exe_path in seen_exes:
+                    continue
+                seen_exes.add(exe_path)
+                
+                user_processes.append(p)
+        except Exception as e:
+            self.log(str(e))
+            
+        for proc in user_processes:
             try:
-                all_processes = psutil.process_iter()
-                for p in all_processes:
-                    process_user = p.username()
-                    if '\\' in process_user: process_user_name = process_user.split('\\')[-1]
-                    elif '/' in process_user: process_user_name = process_user.split('/')[-1]
-                    else: process_user_name = process_user
-                    
-                    if process_user_name.lower() != get_downloaded_user()['active_user'].lower():
-                        continue
-                        
-                    if p.pid < 1000:
-                        continue
-                    if p.status() != psutil.STATUS_RUNNING:
-                        continue
-                    
-                    exe_path = p.exe()
-                    if not exe_path:
-                        continue
-                    
-                    if exe_path.lower().startswith('c:\\windows'):
-                        continue
-                    
-                    if exe_path in seen_exes:
-                        continue
-                    seen_exes.add(exe_path)
-                    
-                    user_processes.append(p)
-            except Exception as e:
-                self.log(str(e))
-                
-            for proc in user_processes:
-                try:
-                    proc_name = proc.name()
-                    if proc_name.lower().endswith('.exe'):
-                        proc_name = proc_name[:-4]
-                    self.user_processes_dict[proc_name] = proc.exe()
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    continue    
-                
-            try:
-                with open(f"{Mitapath}/data/processes_data.json", "w", encoding="utf-8") as f:
-                    json.dump(self.user_processes_dict, f, ensure_ascii=False, indent=4)
-            except Exception as e:
-                self.log(f"Ошибка записи в JSON: {str(e)}")
-                
-            self.stop_event.wait(10)
+                proc_name = proc.name()
+                if proc_name.lower().endswith('.exe'):
+                    proc_name = proc_name[:-4]
+                self.user_processes_dict[proc_name] = proc.exe()
+            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                continue   
+            
+    def collect_PC_workload_data(self):
+        self.cpu_percent = psutil.cpu_percent()
+        self.mem_free = psutil.virtual_memory().available/1024/1024/1024
+        drive_letter = self.current_drive[0]
+        self.disk_usage = self.get_disk_busy_time_pdh(drive_letter)
+        
+        self.workload_info = {
+            "CPU_percent": self.cpu_percent,
+            "Free_RAM": self.mem_free,
+            "Disk_usage": self.disk_usage,
+        }
+        
+    def check_disk_usage(self):
+        try:
+            utilization = self.disk_usage
+            
+            if utilization < 60:
+                self.disk_usage_bool = True
+            elif utilization > 90:
+                self.disk_usage_bool = False
+        except PermissionError as e:
+            self.disk_usage_bool = False
+            self.log(f"Не удаётся прочитать загрузку диска. Ошибка: {str(e)}")
+
                             
     def CollectionFilesData(self):
-        while not self.stop_event.is_set():
+        win32process.SetThreadPriority(win32api.GetCurrentThread(), -1)
+        while not self.stop_event.is_set() and not self.stop_scanning_files.is_set():
             try:
+                self.is_scanning_files = True
                 disks = [get_downloaded_user().get('profile_path')] + [d.device for d in psutil.disk_partitions(all=True) if d.fstype and d.device != "C:\\"]
                 for disk in disks:
+                    self.collect_PC_workload_data()
+                    self.check_disk_usage()
                     if not self.disk_usage_bool:
                         self.log(f"Диск {disk} загружен, пропускаем сканирование")
                         continue
@@ -333,45 +366,63 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                         self.log(f"Ошибка сканирования диска {disk}: {str(e)}")
                     
                     time.sleep(1)
+                    
+                self.is_scanning_files = False
             except Exception as e:
                 self.log(f"Ошибка в collection_files_data: {str(e)}")
-                self.stop_event.wait(60)
+                self.stop_event.wait(30)
             
-            self.stop_event.wait(600)
-                
-    def CheckDiskUsage(self):
+            for _ in range(360):
+                if self.stop_event.is_set() or self.stop_scanning_files.is_set():
+                    self.stop_scanning_files.clear()
+                    break
+                time.sleep(1)
+            
+    def CheckDisksJSON(self):
         while not self.stop_event.is_set():
-            try:
-                utilization = self.disk_usage
-                
-                if utilization < 60:
-                    self.disk_usage_bool = True
-                elif utilization > 90:
-                    self.disk_usage_bool = False
-            except PermissionError as e:
-                self.disk_usage_bool = False
-                self.log(f"Не удаётся прочитать загрузку диска. Ошибка: {str(e)}")
-
+            self.filesClass.GetDisksInfo()
+            with open(self.disks_file, "r+", encoding="utf-8") as f:
+                old_disks = json.load(f)
+                if old_disks:
+                    if old_disks["Disks"] != self.filesClass.disks:
+                        f.seek(0)
+                        json.dump({"Disks": self.filesClass.disks, "Time": time.time()}, f, indent=4, ensure_ascii=False)
+                        f.truncate()
+                        if not self.is_scanning_files:
+                            self.stop_scanning_files.set()
+                else:
+                    f.seek(0)
+                    json.dump({"Disks": self.filesClass.disks, "Time": time.time()}, f, indent=4, ensure_ascii=False)
+                    f.truncate()
+                    
             self.stop_event.wait(60)
             
-    def CheckPCWorkload(self):
-        while not self.stop_event.is_set():
-            self.cpu_percent = psutil.cpu_percent()
-            self.mem_free = psutil.virtual_memory().available/1024/1024/1024
-            drive_letter = self.current_drive[0]
-            self.disk_usage = self.get_disk_busy_time_pdh(drive_letter)
+    def CheckLocalhost(self):
+        win32process.SetThreadPriority(win32api.GetCurrentThread(), 1)
+        try:
+            while not self.stop_event.is_set():
+                try:
+                    sock, addr = self.listener.accept()
+                    request_data = sock.recv(16384).decode('utf-8')
+                    
+                    if "processes" in request_data.lower():
+                        self.collect_processes_data()
+                        sock.sendall(json.dumps(self.user_processes_dict).encode('utf-8'))
+                    elif "workload" in request_data.lower():
+                        self.collect_PC_workload_data()
+                        sock.sendall(json.dumps(self.workload_info).encode('utf-8'))
+                    else:
+                        self.log("Не удалось распознать запрос")
+                    
+                    sock.close()
+                except WindowsError:
+                    pass
+                except Exception as e:
+                    print(f"Ошибка приёма данных с локального хоста: {e}")
             
-            workload_info = {
-                "CPU percent (%)": self.cpu_percent,
-                "Free RAM (Gb)": self.mem_free,
-                "Disk usage (%)": self.disk_usage,
-                "Disks": self.filesClass.disks
-            }
-            
-            with open(self.workload_file, 'w', encoding='utf-8') as f:
-                json.dump(workload_info, f, indent=2, ensure_ascii=False)
-            
-            self.stop_event.wait(30)
+                self.stop_event.wait(1)
+        finally:
+            self.listener.close()
             
     def StartThreads(self):
         threads = []
@@ -380,17 +431,13 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         thread1.start()
         threads.append(thread1)
         
-        thread2 = threading.Thread(target=self.CollectionProcessesData, daemon=True)
+        thread2 = threading.Thread(target=self.CheckDisksJSON, daemon=True)
         thread2.start()
         threads.append(thread2)
         
-        thread3 = threading.Thread(target=self.CheckDiskUsage, daemon=True)
+        thread3 = threading.Thread(target=self.CheckLocalhost, daemon=True)
         thread3.start()
         threads.append(thread3)
-        
-        thread4 = threading.Thread(target=self.CheckPCWorkload(), daemon=True)
-        thread4.start()
-        threads.append(thread4)
         
         self.log("Все потоки запущены")
         return threads
@@ -427,11 +474,11 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                         if i == 0:
                             self.threads[i] = threading.Thread(target=self.CollectionFilesData, daemon=True)
                         elif i == 1:
-                            self.threads[i] = threading.Thread(target=self.CollectionProcessesData, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.CheckDisksJSON, daemon=True)
                         elif i == 2:
-                            self.threads[i] = threading.Thread(target=self.CheckDiskUsage, daemon=True)
+                            self.threads[i] = threading.Thread(target=self.CheckLocalhost, daemon=True)
                         self.threads[i].start()
-                if int(time.time()) % 600 == 0:
+                if int(time.time()) % 3600 == 0:
                     self.log("Сервис активен...")
         except Exception as e:
             self.log(f"Критическая ошибка в SvcDoRun: {str(e)}")
