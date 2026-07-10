@@ -18,6 +18,7 @@ pycaw
 patool
 face_recognition
 pillow
+pyrubberband
 torch==2.3.1
 numpy==1.26.4
 vosk==0.3.38
