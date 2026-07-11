@@ -1,50 +1,35 @@
-import keyboard
+from pycaw.pycaw import AudioUtilities
 
 class Sound():
-    def __init__(self, current_volume, is_muted):
-        self.current_volume = current_volume
-        self.is_muted = is_muted
+    def __init__(self):
+        self.volume = AudioUtilities.GetSpeakers().EndpointVolume
+        self.current_volume = self.volume.GetMasterVolumeLevelScalar()
+        self.is_muted = self.volume.GetMute()
 
     def mute(self):
         if not self.is_muted:
             self.is_muted = True
-            keyboard.send("volume mute")
+            self.volume.SetMute(1, None)
     
     def demute(self):
         if self.is_muted:
             self.is_muted = False
-            keyboard.send("volume mute")
+            self.volume.SetMute(0, None)
 
-    @staticmethod
-    def volume_up(value):
-        for i in range(value//2):
-            keyboard.send("volume up")
+    def volume_up(self, value):
+        self.volume.SetMasterVolumeLevelScalar(self.current_volume + value/100, None)
+        self.current_volume = value/100
 
-    @staticmethod
-    def volume_down(value):
-        for i in range(value//2):
-            keyboard.send("volume down")
+    def volume_down(self, value):
+        self.volume.SetMasterVolumeLevelScalar(self.current_volume - value/100, None)
+        self.current_volume = value/100
 
     def volume_set(self, value):
-        if value > 100:
-            value = 100
-        elif int(value) < 0:
-            value = 0
-        if self.current_volume == None:
-            self.volume_down(100)
-            self.volume_up(value)
-            self.current_volume = (value // 2) * 2
-        elif self.current_volume > value:
-            self.volume_down(self.current_volume - value)
-            self.current_volume -= (value // 2) * 2
-        else:
-            self.volume_up(value - self.current_volume)
-            self.current_volume += (value // 2) * 2
+        self.volume.SetMasterVolumeLevelScalar(value/100, None)
+        self.current_volume = value/100
 
-    # @staticmethod
-    # def volume_min(self):
-    #     self.volume_set(0)
+    def volume_min(self):
+        self.volume.SetMasterVolumeLevelScalar(0, None)
 
-    # @staticmethod
-    # def volume_max(self):
-    #     self.volume_set(100)
+    def volume_max(self):
+        self.volume.SetMasterVolumeLevelScalar(1, None)

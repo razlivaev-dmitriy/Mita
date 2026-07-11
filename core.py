@@ -104,7 +104,7 @@ def start_interface():
 #print("Main Mita's model is loaded, but disabled")
 
 with vosk_without_logs():
-    model = Model(f'{path_of_this_file}/vosk-model-small-ru-0.22')
+    model = Model(f'{path_of_this_file}/models/vosk-model-small-ru-0.22')
     rec = KaldiRecognizer(model,16000)
     p = pyaudio.PyAudio()
 stream = p.open(format=pyaudio.paInt16,channels=1,rate=16000,input=True,frames_per_buffer=8000)
@@ -172,7 +172,7 @@ functions = [StartProgramm,                          # 1
             CloseProgramm,                           # 6
             QuitComputer,                            # 7
             RebootComputer,                          # 8
-            Set_reminder,                            # 9
+            SetReminder,                            # 9
             SetScreenBrightness,                     # 10
             SetSound,                                # 11
             UpSound,                                 # 12
@@ -254,7 +254,6 @@ if __name__ == "__main__":
                             print("обрезанный text: ", text_spl)
 
                     if triggers[i][iii] in text: # if main_output[0][i] >= 0.75: # После тестов вернуть обратно
-                        LearnPathsLaunchedProcesses()
                         #print(main_output[i], i)
                         len_trigger = triggers[i][iii].split(" ")
 

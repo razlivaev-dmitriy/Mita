@@ -9,44 +9,34 @@ try:
     sleep(0.1)
     import os
     os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-    import psutil
-    import webbrowser as webb
-    # import pyttsx3 as p3
-    import json
-    # from TTS.api import TTS
-    import torch
-    import sounddevice as sd
-    import screen_brightness_control as sbc
-    import numpy as np
-    from scipy import signal
-    # from pydub import AudioSegment
     from sound import Sound
-    from selenium.webdriver import Chrome
-    from selenium.webdriver.chrome.options import Options
-    # from selenium.webdriver.chrome.service import Service
-    # import chromedriver_autoinstaller
+    from voice import Voice
+    import webbrowser as webb
+    import json
+    import screen_brightness_control as sbc
     from bs4 import BeautifulSoup
-    from re import sub #, split
+    from re import sub
     import winreg as reg
-    from explorer import Explorer, path_of_this_file, username, current_drive
+    from explorer import Explorer, path_of_this_file, username, GetDisksByJSON
     import threading
     from contextlib import contextmanager
-
+    import socket
 
     os.system("pip install --upgrade pip > NUL 2>&1")
     os.system("pip install --upgrade selenium > NUL 2>&1")
+    from selenium.webdriver import Chrome
+    from selenium.webdriver.chrome.options import Options
     print("Установка необходимых зависимостей завершена")
     
 
     user_processes_dict = {}
-    user_processes_true = []
     user_files_dict = {}
     reminders = {}
     hive = reg.HKEY_CURRENT_USER
     subKey = r"Software\Microsoft\Windows\CurrentVersion\Run"
     files_learning = False
     disk_usage_bool = True
-    device = torch.device('cpu')
+    
 
     en_to_ru_alphabet = {".": " точка ", "shch": "щ", "tion": "шн", "sch": "ск", "chr": "хр", "e ": " ", "e-": "-", "e_": "_", "qw": "кв", "dge": "дж", "ch": "ч", "sh": "ш", "pp": "п", "mm": "м", "ee": "и", "ea": "и", "nn": "н", "oo": "у", "ou": "ау", "ss": "с", "ph": "ф", "th": "т", "wh": "в", "wr": "р", "kn": "н", "ck": "к", "ce": "се", "ci": "си", "cy": "си", "ur": "ёр", "ye": "ай", "a": "а", "b": "б", "c": "к", "d": "д", "e": "е", "f": "ф", "g": "г", "h": "х", "i": "и", "j": "дж", "k": "к", "l": "л", "m": "м", "n": "н", "o": "о", "p": "п", "q": "кв", "r": "р", "s": "с", "t": "т", "u": "у", "v": "в", "w": "в", "x": "кс", "y": "и", "z": "з"}#, "Shch": "Щ", "Sch": "Ск", "Qw": "Кв", "Chr": "Хр", "Ch": "Ч", "Sh": "Ш", "Pp": "П", "Mm": "М", "Ee": "И", "Ea": "И", "Nn": "Н", "Oo": "У", "Ss": "С", "Ph": "Ф", "Th": "З", "Wh": "В", "Wr": "Р", "Kn": "Н", "Ck": "К", "Ce": "Се", "Ci": "Си", "Cy": "Си", "A": "Эй", "B": "Би", "C": "Си", "D": "Ди", "E": "И", "F": "Эф", "G": "Джи", "H": "Эйч", "I": "Ай", "J": "Джей", "K": "Кей", "L": "Эл", "M": "Эм", "N": "Эн", "O": "Оу", "P": "Пи", "Q": "Кью", "R": "Ар", "S": "Эс", "T": "ти", "U": "Ю", "V": "Ви", "W": "В", "X": "Икс", "Y": "вай", "Z": "зет"}
 
@@ -180,95 +170,16 @@ try:
         driver = Chrome(options=chrome_options)
 
     def VoicingPrepare():
-        global model, sample_rate, speaker
-        # global device, tts, voice, admin_error
-        # admin_error = np.array(AudioSegment.from_wav(f"{path_of_this_file}admin_error.wav").get_array_of_samples())
-        # device = "cuda" if torch.cuda.is_available() else "cpu"
-        # tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2", progress_bar=True).to(device)
-        # voice = p3.init()
-        model = torch.package.PackageImporter(f"{path_of_this_file}\\v5_ru.pt").load_pickle("tts_models", "model")
-        model.to(device)
-        sample_rate = 48000
-        speaker = 'xenia'
+        global voice
+        voice = Voice()
 
     def SoundPrepare():
         global sound
-        sound = Sound(None, False)
+        sound = Sound()
 # 
 
 
-# Общие функции
-
-    def LearnPathsLaunchedProcesses():
-        global user_processes_dict, user_processes_true
-
-        user_processes = []
-        user_processes_names = []
-        user_processes_paths = []
-
-        with open(f"{path_of_this_file}\\processes_data.json", "r", encoding="utf-8") as f:
-            user_processes_dict = json.load(f)
-
-        try:
-            all_processes = psutil.process_iter()
-            for p in all_processes:
-                if p.username() == psutil.Process().username():
-                    if p.pid >= 1000:
-                        if p.status() == psutil.STATUS_RUNNING:
-                            for s in range(len(p.exe())):
-                                if s >= 10:
-                                    break
-                                if p.exe()[s] == "C:\Windows"[s]:
-                                    continue
-                                else:
-                                    user_processes.append(p)
-                                    break
-            
-            for i in range(len(user_processes) - 1):
-                if i > 0:
-                    for ii in range(i-1, 0, -1):
-                        try:
-                            if user_processes[i].exe() == user_processes[ii].exe():
-                                break
-                        except psutil.NoSuchProcess:
-                            pass
-                    else:
-                        user_processes_true.append(user_processes[i])
-                        
-            for i in user_processes_true:
-                user_processes_paths.append(i.exe())
-                user_processes_names.append(i.name()[:-4])
-                user_processes_dict[i.name()[:-4]] = i.exe()
-        except:
-            #  print(f"{path_of_this_file}admin_error.wav".replace("\\", "/"))
-            #  playsound(f"{path_of_this_file}admin_error.wav".replace("\\", "/"))
-            #  print(f"admin_error.wav")
-            #  playsound(f"admin_error.wav")
-            # sd.play(admin_error, 23500)
-            # sd.wait()
-            # sd.stop()
-            return "Невозможно выполнить данное действие по причине отсутствия прав администратора"
-
-        with open(f"{path_of_this_file}\\processes_data.json", "w", encoding="utf-8") as f:
-            json.dump(user_processes_dict, f, ensure_ascii=False, indent=4)
-
-        # user_processes_true, user_processes_names, user_processes_paths, user_processes_dict
-        return ""
-    
-    # def LearnPathsOpenedFiles():
-    #     global user_files_dict
-
-    #     with open(f"{path_of_this_file}\\files_data.json", "r", encoding="utf-8") as f:
-    #         user_files_dict = json.load(f)
-
-    #     for i in user_processes_true:
-    #         if i.open_files() != []:
-    #             user_files_dict[i.name()] = i.open_files()
-
-    #     with open(f"{path_of_this_file}\\files_data.json", "w", encoding="utf-8") as f:
-    #         json.dump(user_files_dict, f, ensure_ascii=False, indent=4)
-
-    #     return user_files_dict
+# Общие функции 
 
     def CheckReminders(rem_dict: dict):
         rem_keys = list(rem_dict.keys())
@@ -280,71 +191,16 @@ try:
                 # Voice('Напоминание: "' + rem_keys[i] + '"')
                 rem_dict.pop(rem_keys[i])
                 return rem_keys[i]
-            
-    def CheckDiskUsage():
-        global disk_usage_bool
-        try:
-            count = exp.GetDiskAction()
-            if count < 50:
-                disk_usage_bool = True
-            elif count > 90:
-                disk_usage_bool = False
-        except PermissionError:
-            disk_usage_bool = False
 
     def CheckThread(rem_dict):
         while 1:
             CheckReminders(rem_dict)
             exp.CheckExplorer()
-            LearnPathsLaunchedProcesses()
-            CheckDiskUsage()
+            GetDisksByJSON()
             CheckInternetConnection()
             sys.stdout.flush()
             sys.stderr.flush()
             sleep(10)
-            
-    # def LearnFilesFromExplorer():
-    #     try:
-    #         elems = os.listdir(current_values[0])
-    #         if current_values[1]: elems = elems[elems.index(current_values[1])-1:]
-    #         exp.StartLearningFiles(current_values[0], elems, current_values[2], disk_usage_bool)
-    #         if disk_usage_bool: current_values[3] = 1
-    #         with open(f"{path_of_this_file}\\files_data.json", "w", encoding="utf-8") as f:
-    #             json.dump(files_dict, f, ensure_ascii=False, indent=2)
-    #     except PermissionError:
-    #         current_values[3] = 1
-            
-    def LearnFilesFromExplorer():
-        global disk_usage_bool
-        try:
-            if exp.stop.is_set(): return
-            exp.LearningFiles(disk_usage_bool)
-            print("Файлы сохранены в базу данных")
-        except PermissionError as e:
-            print(str(e))
-            exp.stop.set()
-            
-    def LearnFiles():
-        global current_drive, disk_usage_bool
-        disks = [f"C:\\Users\\{username}"] + [d.device for d in psutil.disk_partitions() if d.fstype and d.device != "C:\\"]
-        for disk in disks:
-            current_drive = disk
-            exp.stop.clear()
-            exp.stack = [(disk, 0)]
-            while not exp.stop.is_set():
-                # if stop: return
-                CheckDiskUsage()
-                if disk_usage_bool:
-                    exp.GetDisksInfo()
-                    LearnFilesFromExplorer()
-                else:
-                    sleep(5)
-                    continue
-                if not exp.stack:
-                    exp.stop.set()
-                    print(f"Сканирование диска {disk} завершено")
-                sleep(1)
-        exp.CloseDatabase()
 
     def CheckInternetConnection():
         global connection
@@ -358,21 +214,28 @@ try:
             connection = False
 
     def GetProgrammPathByName(programmName: str):
+        GetProgramsByLocalhost()
         return user_processes_dict[programms[programmName]]
     
-    def GetProgramsByJSON():
-        with open(f"{path_of_this_file}\\processes_data.json", "r", encoding="utf-8") as f:
-            founded_programs = json.load(f)
-        for fp in founded_programs:
-            programm_name = fp.lower()
+    def GetProgramsByLocalhost():
+        global programms, user_processes_dict
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(('127.0.0.1', 9999))
+            sock.sendall("processes".encode("utf-8"))
+            founded_programs = json.loads(sock.recv(16384).decode("utf-8"))
+        user_processes_dict.update(founded_programs)
+        for fp_name in founded_programs.keys():
+            programm_name = fp_name.lower()
             if programm_name not in [i.lower() for i in programms.values()]:
-                for letter in en_to_ru_alphabet:
-                    if letter in programm_name:
-                        programm_name = programm_name.replace(letter, en_to_ru_alphabet[letter])
-                if programm_name[-1] == "e":
-                    programm_name = programm_name[:-1]
-                programms.update({programm_name: fp.lower()})
-        # print(programms)
+                programm_name = EnToRuNames(programm_name)
+                programms.update({programm_name: fp_name})
+                
+    def GetPCWorkloadByLocalhost():
+        global workload_info
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.connect(('127.0.0.1', 9999))
+            sock.sendall("workload".encode("utf-8"))
+            workload_info = json.loads(sock.recv(16384).decode("utf-8"))
 
     def EnToRuNames(name: str):
         for letter in en_to_ru_alphabet:
@@ -422,53 +285,21 @@ try:
         # webb.open(f"https://yandex.ru/search/?text={request}", new=2)
         pass
 
-    # def VoicePro(texts: list):
-    #    while 1:
-    #        if texts:
-    #             audio = tts.tts(texts[0], speaker_wav=f"{path_of_this_file}audiodata.wav", language="ru")
-    #             sd.play(audio, 23500)
-    #             sd.wait()
-    #             sd.stop()
-    #             texts.pop(0)
-
-    def Voice(data: list[str]):
+    def Say(data: list[str]):
         if data is None:
             return ["ТЕКСТДЛЯОЗВ"]
-        # audio = tts.tts(text, speaker_wav=f"{path_of_this_file}audiodata.wav", language="ru")
-        # sd.play(audio, 23500)
-        # sd.wait()
-        # sd.stop()
-        # return "Мы оставим эту функцию!"
         text = data[0]
-        audio = model.apply_tts(
-            text=text,
-            speaker=speaker,
-            sample_rate=sample_rate,
-            put_accent=True,
-            put_yo=True
-        )
-        speed = 1.09
-        audio = np.array(audio, dtype=np.float32)
-        max_val = np.max(np.abs(audio))
-        if max_val > 0:
-            target_level = 0.7
-            audio = audio * (target_level / max_val)
-        if speed != 1.0:
-            new_length = int(len(audio) / speed)
-            audio = signal.resample(audio, new_length)
-        sd.play(audio, sample_rate)
-        sd.wait()
+        voice.say(f"<speak>{text}</speak>")
 
     def CloseProgramm(data: list[str]):
         if data is None:
             return ["НЗВФАЙЛА"]
-        LearnPathsLaunchedProcesses()
         print(data)
         name = GetProgrammPathByName(data[0])
-        for process in user_processes_true:
+        for pr_name, pr_path in user_processes_dict.items():
             try:
-                if process.exe() == name:
-                    os.system(f"taskkill /im {process.name()} /f")
+                if pr_path == name:
+                    os.system(f"taskkill /im {pr_name}.exe /f")
             except IndexError:
                 print("Такого процесса нет!")
                 return "Такого процесса нет"
@@ -482,7 +313,7 @@ try:
         webb.open(url, new=2)
         return "Этот сайт открыт"
     
-    def Set_reminder(data: list[int, str]):
+    def SetReminder(data: list[int, str]):
         if data is None:
             return ["ЧИСЛО", "ТЕКСТ"]
         set_time = data[0]
@@ -561,7 +392,7 @@ try:
             programm_path = path_of_this_file
         else:
             file = data[0]
-            programm_path = os.dirname(GetProgrammPathByName(data[0]))
+            programm_path = os.path.dirname(GetProgrammPathByName(data[0]))
         if programm_path == "":
             programm_path = path_of_this_file
         programm_path = os.path.dirname(programm_path)
@@ -732,67 +563,24 @@ try:
 
     print("Загрузка...")
     ExplorerPrepare()
-    print("\r1/9", end="", flush=True)
+    print("\r1/8", end="", flush=True)
     VoicingPrepare()
-    print("\r2/9", end="", flush=True)
+    print("\r2/8", end="", flush=True)
     SoundPrepare()
-    print("\r3/9", end="", flush=True)
+    print("\r3/8", end="", flush=True)
     ParsingPrepare()
-    print("\r4/9", end="", flush=True)
+    print("\r4/8", end="", flush=True)
     CheckInternetConnection()
-    print("\r5/9", end="", flush=True)
-    LearnPathsLaunchedProcesses()
-    print("\r6/9", end="", flush=True)
-    GetProgramsByJSON()
-    print("\r7/9", end="", flush=True)
-
-    # Осторожно! ↓ Не работает!
-    # LearnPathsOpenedFiles()
-
-    # with open(f"{path_of_this_file}\\files_data.json", "r", encoding="utf-8") as f:
-    #     print(json.load(f))
-
+    print("\r5/8", end="", flush=True)
+    GetProgramsByLocalhost()
+    print("\r6/8", end="", flush=True)
+    GetPCWorkloadByLocalhost()
+    print("\r7/8", end="", flush=True)
     thread1 = threading.Thread(target=CheckThread, args=(reminders,))
     thread1.start()
-    print("\r8/9", end="", flush=True)
-    thread2 = threading.Thread(target=LearnFiles)
-    thread2.start()
-    print("\r9/9", end="", flush=True)
+    print("\r8/8", end="", flush=True)
     print("\rЗагрузка завершена")
 
-    # with open(f"{path_of_this_file}processes_data.json", "r", encoding="utf-8") as f:
-    #     print(json.load(f))
-    
-    # ТЕСТЫ
-    # Voice(["Привет, меня зовут Мита. Я ваш голосовой ассистент, помощник в управлении компьютером"])
-    # Voice(["А это моя вторая фраза"])
-    # print(user_files_dict)
-    # print(user_processes_true)
-    # print(OpenFile(["gramota.pdf"]))
-    #print(SetScreenBrightness([70]))
-    #print(UpScreenBrightness([35]))
-    #print(DownScreenBrightness([50]))
-    # print(RemoveProgrammFromAutoStart())
-    # print(UnzippingFiles(r"D:\From desktop\programms systems and projects\vs code\VS Code\other codes\NeuroCoreModificated.zip"))
-    # print(ZippingFiles(r"D:\From desktop\programms systems and projects\vs code\VS Code\other codes\Kvantoriada_2024\NeuroCoreModificated"))
-    # print(LearnCountOfTextsByParse("Пельмени"))
-    # print(Parse(["александр сергеевич пушкин"]))
-    # print(SetSound([50]))
-    # print(UpSound([30]))
-    # print(DownSound([20]))
-    # print(MuteSound())
-    # print(DemuteSound())
-    # print(SetProgrammToAutoStart())
-    # print(RenameFile("D:/Downloads/тест.txt", "текст2.txt"))
-    # print(RemoveFile("D:/Downloads/words_to_numbers_from_RDI.py"))
-    # print(StartProgramm("C:/Users/Admin/AppData/Local/WarThunder/launcher.exe"))
-    # print(Voice("Привет!"))
-    # print(OpenURL("https://www.google.com/search?q=%D0%BF%D0%B5%D1%80%D0%B5%D0%B2%D0%BE%D0%B4%D1%87%D0%B8%D0%BA&oq=&gs_lcrp=EgZjaHJvbWUqCQgAECMYJxjqAjIJCAAQIxgnGOoCMgkIARAjGCcY6gIyCQgCECMYJxjqAjIJCAMQIxgnGOoCMgkIBBAjGCcY6gIyCQgFECMYJxjqAjIJCAYQIxgnGOoCMgkIBxAjGCcY6gLSAQg1ODFqMGoxNagCCLACAQ&sourceid=chrome&ie=UTF-8"))
-    # print(RequestToBrowser("переводчик"))
-    # print(LearnPathsLaunchedProcesses())
-    # print(VoicePro('Очень много текста'))
-    # print(CloseProgramm("C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"))
-    # print(QuitComputer(10))
 except Exception as e:
     print(str(e))
     input()
