@@ -42,18 +42,26 @@ class Explorer():
         self.conn = sqlite3.connect(f'{path_of_this_file}/data/files.db', check_same_thread=False)
         self.cursor = self.conn.cursor()
             
-    def SearchFilesInDB(self, filename, extension=None):
+    def SearchFilesInDB(self, filename=None, extension=None):
         try:
-            if extension == None:
+            if filename == None and extension:
+                self.cursor.execute('''
+                    SELECT name, extension, path, disk_id FROM files 
+                    WHERE extension LIKE ? 
+                ''', (f'%{extension}%',))
+            elif extension == None and filename:
                 self.cursor.execute('''
                     SELECT name, extension, path, disk_id FROM files 
                     WHERE name = ? 
                 ''', (filename,))
-            else:
+            elif filename and extension:
                 self.cursor.execute('''
                 SELECT name, extension, path, disk_id FROM files 
                 WHERE name = ? AND extension LIKE ? 
             ''', (filename, f'%{extension}%'))
+            else:
+                print("Параметры для поиска не были указаны")
+                return []
             results = self.cursor.fetchall()
             existing_files = []
             for result in results:
