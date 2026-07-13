@@ -23,6 +23,7 @@ openai-whisper
 silero-vad
 noisereduce
 torch==2.3.1
+torchaudio==2.3.1
 numpy==1.26.4
 vosk==0.3.38
 setuptools==80
