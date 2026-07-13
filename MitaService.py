@@ -1,4 +1,4 @@
-import win32serviceutil, win32service, win32event, win32api, win32process
+import win32serviceutil, win32service, win32event, win32api, win32process, win32gui
 import sys
 import time
 from os import path, scandir
@@ -269,13 +269,12 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
         self.listener = sock
     
     def collect_processes_data(self):
-        user_processes = []
-        seen_exes = set()
+        user_processes = {}
 
         try:
-            all_processes = psutil.process_iter()
+            all_processes = psutil.process_iter(['pid', 'name', 'exe', 'username', 'create_time', 'status'])
             for p in all_processes:
-                process_user = p.username()
+                process_user = p.info["username"]
                 if '\\' in process_user: process_user_name = process_user.split('\\')[-1]
                 elif '/' in process_user: process_user_name = process_user.split('/')[-1]
                 else: process_user_name = process_user
@@ -283,34 +282,31 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
                 if process_user_name.lower() != get_downloaded_user()['active_user'].lower():
                     continue
                     
-                if p.pid < 1000:
+                p_pid = p.info["pid"]
+                if p_pid < 1000:
                     continue
-                if p.status() != psutil.STATUS_RUNNING:
+                if p.info["status"] != psutil.STATUS_RUNNING:
                     continue
                 
-                exe_path = p.exe()
+                exe_path = p.info["exe"]
                 if not exe_path:
                     continue
                 
                 if exe_path.lower().startswith('c:\\windows'):
                     continue
                 
-                if exe_path in seen_exes:
-                    continue
-                seen_exes.add(exe_path)
+                name = p.info["name"].lower()
+                name = name.replace(".exe", "") if name.endswith(".exe") else name
                 
-                user_processes.append(p)
+                if name not in user_processes:
+                    user_processes[name] = {"exes": [], "pids": [], "windows": []}
+                if exe_path not in user_processes[name]["exes"]:
+                    user_processes[name]["exes"].append(exe_path)
+                user_processes[name]["pids"].append(p_pid)
         except Exception as e:
             self.log(str(e))
             
-        for proc in user_processes:
-            try:
-                proc_name = proc.name()
-                if proc_name.lower().endswith('.exe'):
-                    proc_name = proc_name[:-4]
-                self.user_processes_dict[proc_name] = proc.exe()
-            except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                continue   
+        self.user_processes_dict = user_processes 
             
     def collect_PC_workload_data(self):
         self.cpu_percent = psutil.cpu_percent()
@@ -338,7 +334,7 @@ class MitaDataCollectionService(win32serviceutil.ServiceFramework):
 
                             
     def CollectionFilesData(self):
-        win32process.SetThreadPriority(win32api.GetCurrentThread(), -1)
+        win32process.SetThreadPriority(win32api.GetCurrentThread(), -2)
         while not self.stop_event.is_set() and not self.stop_scanning_files.is_set():
             try:
                 self.is_scanning_files = True
