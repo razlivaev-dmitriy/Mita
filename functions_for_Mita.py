@@ -21,6 +21,14 @@ try:
     import threading
     from contextlib import contextmanager
     import socket
+    import pyaudio
+    import numpy as np
+    import whisper
+    from silero_vad import load_silero_vad
+    import queue
+    import torch
+    from noisereduce import reduce_noise
+    import win32gui, win32process, win32con
 
     os.system("pip install --upgrade pip > NUL 2>&1")
     os.system("pip install --upgrade selenium > NUL 2>&1")
@@ -30,7 +38,6 @@ try:
     
 
     user_processes_dict = {}
-    user_files_dict = {}
     reminders = {}
     hive = reg.HKEY_CURRENT_USER
     subKey = r"Software\Microsoft\Windows\CurrentVersion\Run"
@@ -43,20 +50,20 @@ try:
     programms = {
         "вартандер":"launcher",
         "тундру":"launcher",
-        "телеграмм":"Telegram",
-        "телеграм":"Telegram",
-        "вскод":"Code",
-        "дискорд":"Discord",
-        "дс":"Discord",
+        "телеграмм":"telegram",
+        "телеграм":"telegram",
+        "вскод":"code",
+        "дискорд":"discord",
+        "дс":"discord",
         "хром":"chrome",
         "яндекс":"yandex",
-        "ватсап":"WhatsApp",
+        "ватсап":"whatsapp",
         "стим":"steam",
         "захват экрана":"obs64",
-        "павэр поинт":"POWERPNT",
-        "презентации":"POWERPNT",
-        "документы":"WINWORD",
-        "калькулятор":"CalculatorApp",
+        "павэр поинт":"powerpnt",
+        "презентации":"powerpnt",
+        "документы":"winword",
+        "калькулятор":"calculatorapp",
     }
 
     ints = {
@@ -172,6 +179,12 @@ try:
     def VoicingPrepare():
         global voice
         voice = Voice()
+        
+    def ListeningPrepare():
+        global whisper_model, vad_model, audio_queue
+        whisper_model = whisper.load_model("small")
+        vad_model = load_silero_vad()
+        audio_queue = queue.Queue()
 
     def SoundPrepare():
         global sound
@@ -180,6 +193,101 @@ try:
 
 
 # Общие функции 
+
+    def Listen():
+        global noise_buffer, noise_buffer_pos
+        p = pyaudio.PyAudio()
+        stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True, frames_per_buffer=512)
+        stream.start_stream()
+
+        speech_buffer = bytearray()
+        silence_counter = 0
+        chunk_duration = 512/16000
+        pre_buffer = bytearray(32000)
+        pre_buffer_pos = 0
+        was_speech = False
+        noise_buffer = bytearray(64000)
+        noise_buffer_pos = 0
+
+        try:
+            while 1:
+                data = stream.read(512, exception_on_overflow=True)
+                audio_chunk = np.frombuffer(data, dtype=np.int16).astype(np.float32)/32768.0
+                is_speech = vad_model(torch.from_numpy(audio_chunk).unsqueeze(0), 16000).item()
+                
+                chunk_len = len(data)
+                if pre_buffer_pos + chunk_len <= 32000:
+                    pre_buffer[pre_buffer_pos:pre_buffer_pos + chunk_len] = data
+                else:
+                    part1 = 32000 - pre_buffer_pos
+                    pre_buffer[pre_buffer_pos:] = data[:part1]
+                    pre_buffer[:chunk_len - part1] = data[part1:]
+                pre_buffer_pos = (pre_buffer_pos + chunk_len) % 32000
+
+                if is_speech > 0.8:
+                    if not was_speech:
+                        if pre_buffer_pos == 0:
+                            pre_data = pre_buffer
+                        else:
+                            pre_data = pre_buffer[pre_buffer_pos:] + pre_buffer[:pre_buffer_pos]
+                        speech_buffer.extend(pre_data)
+                        speech_buffer.extend(data)
+                        silence_counter = 0
+                    else:
+                        speech_buffer.extend(data)
+                    was_speech = True
+                else:
+                    if was_speech:
+                        was_speech = False
+                    if noise_buffer_pos + chunk_len <= 64000:
+                        noise_buffer[noise_buffer_pos:noise_buffer_pos + chunk_len] = data
+                    else:
+                        noise_part1 = 64000 - noise_buffer_pos
+                        noise_buffer[noise_buffer_pos:] = data[:noise_part1]
+                        noise_buffer[:chunk_len - noise_part1] = data[noise_part1:]
+                    noise_buffer_pos = (noise_buffer_pos + chunk_len) % 64000
+                    silence_counter += 1
+                    if len(speech_buffer) > 0 and silence_counter*chunk_duration >= 0.8:
+                        speech_duration = len(speech_buffer)/32000
+                        if speech_duration >= 0.5:
+                            audio_queue.put(bytes(speech_buffer))
+                        speech_buffer.clear()
+                        silence_counter = 0
+        except Exception as e:
+            print(f"Ошибка захвата голоса: {e}")
+        finally:
+            stream.stop_stream()
+            stream.close()
+            p.terminate()
+
+    def VoiceAnalyze():
+        global noise_buffer
+        while 1:
+            try:
+                audio_bytes = audio_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+
+            audio_np = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32)/32768.0
+            
+            if noise_buffer:
+                if noise_buffer_pos == 0:
+                    noise_data = noise_buffer
+                else:
+                    noise_data = noise_buffer[noise_buffer_pos:] + noise_buffer[:noise_buffer_pos]
+                noise_np = np.frombuffer(noise_data, dtype=np.int16).astype(np.float32) / 32768.0
+                audio_np = reduce_noise(y=audio_np, y_noise=noise_np, sr=16000, stationary=True, prop_decrease=0.8)
+            
+            rms = np.sqrt(np.mean(audio_np**2))
+            if rms > 1e-6:
+                scale = 0.25/rms
+                audio_np = np.clip(audio_np * scale, -1.0, 1.0)
+
+            result = whisper_model.transcribe(audio_np, language="ru", fp16=False, temperature=0.0, compression_ratio_threshold=1.5, logprob_threshold=-2.0, no_speech_threshold=0.5, condition_on_previous_text=False)#, initial_prompt=",".join(programms.keys()))
+            text = result["text"].strip()
+            if text:
+                yield text
+            audio_queue.task_done()
 
     def CheckReminders(rem_dict: dict):
         rem_keys = list(rem_dict.keys())
@@ -203,15 +311,22 @@ try:
             sleep(10)
 
     def CheckInternetConnection():
-        global connection
+        global connection, driver
         connection = False
         try:
             driver.get("http://google.com")
             connection = True
-        except Exception as e:
-            print(str(e))
-            print("Вы не подключены к интернету")
-            connection = False
+        except:
+            try:
+                chrome_options = Options()
+                chrome_options.add_argument("--headless")
+                driver = Chrome(options=chrome_options)
+                driver.get("http://google.com")
+                connection = True
+            except Exception as e:
+                print(str(e))
+                print("Вы не подключены к интернету")
+                connection = False
 
     def GetProgrammPathByName(programmName: str):
         GetProgramsByLocalhost()
@@ -225,10 +340,12 @@ try:
             founded_programs = json.loads(sock.recv(16384).decode("utf-8"))
         user_processes_dict.update(founded_programs)
         for fp_name in founded_programs.keys():
-            programm_name = fp_name.lower()
-            if programm_name not in [i.lower() for i in programms.values()]:
+            programm_name = fp_name
+            if programm_name not in [i for i in programms.values()]:
                 programm_name = EnToRuNames(programm_name)
                 programms.update({programm_name: fp_name})
+        with open(f"{path_of_this_file}/data/processes.json", "w", encoding="utf-8") as f:
+            json.dump(user_processes_dict, f, ensure_ascii=False, indent=4)
                 
     def GetPCWorkloadByLocalhost():
         global workload_info
@@ -273,9 +390,11 @@ try:
     def StartProgramm(data: list[str]):
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Программа не найдена"
         name = data[0]
         print(data)
-        os.startfile(GetProgrammPathByName(name))
+        os.startfile(GetProgrammPathByName(name)["exes"][0])
         return "Программа запущена"
     
     def RequestToBrowser(data: list[str]):
@@ -290,25 +409,67 @@ try:
             return ["ТЕКСТДЛЯОЗВ"]
         text = data[0]
         voice.say(f"<speak>{text}</speak>")
-
+        
     def CloseProgramm(data: list[str]):
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Программа не найдена"
         print(data)
-        name = GetProgrammPathByName(data[0])
+        proc_data = GetProgrammPathByName(data[0])
+
+        pids = proc_data["pids"]
+        window = []
+
+        def enum_cb(hwnd, hwnds):
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
+            if pid in pids:
+                hwnds.append((hwnd, pid))
+            return True
+        found = []
+        win32gui.EnumWindows(enum_cb, found)
+        if found:
+            hwnd, pid = found[0]
+            window = {'hwnd': hwnd, 'pid': pid}
+            
+        if window:
+            hwnd = window['hwnd']
+            win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+            sleep(0.5)
+            if win32gui.IsWindow(hwnd):
+                os.system(f"taskkill /pid {window['pid']}")
+            return "Программа закрыта"
+        else:
+            pids = proc_data["pids"]
+            if pids:
+                for pid in pids:
+                    os.system(f"taskkill /pid {pid} /f")
+                return "Программа закрыта принудительно"
+            else:
+                return "Процесс не найден"
+
+    def CriticalCloseProgramm(data: list[str]):
+        if data is None:
+            return ["НЗВФАЙЛА"]
+        if not data:
+            return "Программа не найдена"
+        print(data)
+        proc = GetProgrammPathByName(data[0])
         for pr_name, pr_path in user_processes_dict.items():
             try:
-                if pr_path == name:
+                if pr_path == proc["exes"][0]:
                     os.system(f"taskkill /im {pr_name}.exe /f")
             except IndexError:
                 print("Такого процесса нет!")
                 return "Такого процесса нет"
                 # Voice("Файл не найден")
-        return "Программа закрыта"
+        return "Программа закрыта экстренно"
     
     def OpenURL(data: list[str]):
         if data is None:
             return ["ССЫЛ"]
+        if not data:
+            return "Сайт не найден"
         url = data[0]
         webb.open(url, new=2)
         return "Этот сайт открыт"
@@ -316,6 +477,8 @@ try:
     def SetReminder(data: list[int, str]):
         if data is None:
             return ["ЧИСЛО", "ТЕКСТ"]
+        if not data:
+            return "Не удалось установить напоминание"
         set_time = data[0]
         text = data[1]
         current_time = int(time())
@@ -367,6 +530,8 @@ try:
     def QuitComputer(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось выключить компьютер"
         time = data[0]
         print("quit system")
         os.system(f'shutdown /s /t {time}')
@@ -377,6 +542,8 @@ try:
     def RebootComputer(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось перезагрузить компьютер"
         time = data[0]
         print("reboot system")
         os.system(f'shutdown /r /t {time}')
@@ -387,12 +554,14 @@ try:
     def SetProgrammToAutoStart(data: list[str] = ["StartMita"]):
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Программа не найдена"
         elif data == ["StartMita"]:
             file = "StartMita"
             programm_path = path_of_this_file
         else:
             file = data[0]
-            programm_path = os.path.dirname(GetProgrammPathByName(data[0]))
+            programm_path = os.path.dirname(GetProgrammPathByName(data[0])["exes"][0])
         if programm_path == "":
             programm_path = path_of_this_file
         programm_path = os.path.dirname(programm_path)
@@ -407,10 +576,12 @@ try:
     def RemoveProgrammFromAutoStart(data: list[str] = ["StartMita"]): 
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Программа не найдена"
         if data[0] == "StartMita":
             programm = data[0]
         else:
-            programm = GetProgrammPathByName(data[0])
+            programm = GetProgrammPathByName(data[0])["exes"][0]
         try:
             hKey = reg.OpenKey(hive, subKey, 0, reg.KEY_ALL_ACCESS) 
             reg.DeleteValue(hKey, programm)
@@ -424,6 +595,8 @@ try:
     def Parse(data: list[str]):
         if data is None:
             return ["ТЕКСТ"]
+        if not data:
+            return "Информация не найдена"
         task = data[0]
         task = list(task)
         task[0] = task[0].upper()
@@ -448,12 +621,16 @@ try:
     def OpenFile(data: list[str]):
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Файл не найден"
         name = data[0]
         return exp.OpenFile(name)
 
     def RenameFile(data: list[str, str]):
         if data is None:
             return ["НЗВФАЙЛА", "ТЕКСТ"]
+        if not data:
+            return "Файл не найден"
         old_name = data[0]
         new_name = data[1]
         return exp.RenameFile(old_name, new_name)
@@ -461,12 +638,16 @@ try:
     def RemoveFile(data: list[str]):
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Файл не найден"
         name = data[0]
         return exp.RemoveFile(name)
     
     def ZippingFiles(data: list):
         if data is None:
             return ["НЗВФАЙЛА", "ТЕКСТ"]
+        if not data:
+            return "Файлы не найдены"
         path = data[0]
         if len(data) < 2: ziph = ""
         else: ziph = data[1]
@@ -475,6 +656,8 @@ try:
     def UnzippingFiles(data: list):
         if data is None:
             return ["НЗВФАЙЛА"]
+        if not data:
+            return "Архив не найден"
         path_to_ziph = data[0]
         return exp.UnzippingFiles(path_to_ziph)
 ##
@@ -484,6 +667,8 @@ try:
     def SetScreenBrightness(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось изменить яркость экрана"
         level = data[0]
         try:
             if level >= 0 and level < 101:
@@ -501,6 +686,8 @@ try:
     def UpScreenBrightness(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось изменить яркость экрана"
         level = sbc.get_brightness()[0] + data[0]
         if level > 100:
             level = 100
@@ -512,6 +699,8 @@ try:
     def DownScreenBrightness(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось изменить яркость экрана"
         level = sbc.get_brightness()[0] - data[0]
         if level < 0:
             level = 0
@@ -526,6 +715,8 @@ try:
     def SetSound(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось изменить громкость звука"
         level = data[0]
         sound.volume_set(level)
         for key, value in ints.items():
@@ -535,6 +726,8 @@ try:
     def UpSound(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось изменить громкость звука"
         level = data[0]
         sound.volume_up(level)
         for key, value in ints.items():
@@ -544,6 +737,8 @@ try:
     def DownSound(data: list[int]):
         if data is None:
             return ["ЧИСЛО"]
+        if not data:
+            return "Не удалось изменить громкость звука"
         level = data[0]
         sound.volume_down(level)
         for key, value in ints.items():
@@ -563,22 +758,27 @@ try:
 
     print("Загрузка...")
     ExplorerPrepare()
-    print("\r1/8", end="", flush=True)
+    print("\r1/10", end="", flush=True)
     VoicingPrepare()
-    print("\r2/8", end="", flush=True)
+    print("\r2/10", end="", flush=True)
     SoundPrepare()
-    print("\r3/8", end="", flush=True)
+    print("\r3/10", end="", flush=True)
     ParsingPrepare()
-    print("\r4/8", end="", flush=True)
+    print("\r4/10", end="", flush=True)
+    ListeningPrepare()
+    print("\r5/10", end="", flush=True)
     CheckInternetConnection()
-    print("\r5/8", end="", flush=True)
+    print("\r6/10", end="", flush=True)
     GetProgramsByLocalhost()
-    print("\r6/8", end="", flush=True)
+    print("\r7/10", end="", flush=True)
     GetPCWorkloadByLocalhost()
-    print("\r7/8", end="", flush=True)
+    print("\r8/10", end="", flush=True)
     thread1 = threading.Thread(target=CheckThread, args=(reminders,))
     thread1.start()
-    print("\r8/8", end="", flush=True)
+    print("\r9/10", end="", flush=True)
+    thread2 = threading.Thread(target=Listen)
+    thread2.start()
+    print("\r10/10", end="", flush=True)
     print("\rЗагрузка завершена")
 
 except Exception as e:
